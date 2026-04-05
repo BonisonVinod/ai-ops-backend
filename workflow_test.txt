@@ -1,0 +1,5 @@
+Customer submits documents.
+Operations verifies documents.
+Operations creates account.
+System sends confirmation email.
+Customer receives welcome message.
