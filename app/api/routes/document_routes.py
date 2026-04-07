@@ -42,7 +42,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
     try:
         text = extract_text(temp_path)
         text = text.replace("\x00", "")
-        chunks = chunk_text(text)
+        chunks = chunk_text(text)[:3]
 
         # Workflow
         build_workflow_from_steps = get_workflow_builder()
