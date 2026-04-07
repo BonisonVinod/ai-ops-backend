@@ -43,7 +43,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         #    chunks,
         #    workflow_name=file.filename
         #)
-	workflow = None
+workflow = None
         # Generate embeddings
         embeddings = generate_embeddings(chunks)
 
