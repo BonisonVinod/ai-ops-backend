@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.session.db import get_db
 print("DEBUG: DB import done")
 
-from app.workflow.workflow_builder import build_workflow_from_steps
+build_workflow_from_steps = None
 print("DEBUG: workflow_builder import done")
 
 import os
@@ -43,11 +43,12 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         text = text.replace("\x00", "")
         chunks = chunk_text(text)
 
-        workflow = build_workflow_from_steps(
-            db,
-            chunks,
-            workflow_name=file.filename
-        )
+      	#workflow = build_workflow_from_steps(
+        #    db,
+        #    chunks,
+        #    workflow_name=file.filename
+        #)
+	 workflow = None
 
         embeddings = generate_embeddings(chunks)
 
@@ -73,7 +74,7 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
             stored += 1
 
         return {
-            "workflow_id": workflow.id,
+            "workflow_id": None,
             "filename": file.filename,
             "chunks_processed": len(chunks),
             "vectors_stored": stored
