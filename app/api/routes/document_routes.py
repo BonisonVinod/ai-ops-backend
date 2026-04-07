@@ -1,3 +1,18 @@
+print("DEBUG: document_routes file loaded")
+
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+print("DEBUG: fastapi import done")
+
+from app.services.document_service import extract_text, chunk_text
+print("DEBUG: document_service import done")
+
+from sqlalchemy.orm import Session
+from app.database.session.db import get_db
+print("DEBUG: DB import done")
+
+from app.workflow.workflow_builder import build_workflow_from_steps
+print("DEBUG: workflow_builder import done")
+
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from app.services.document_service import extract_text, chunk_text
 from sqlalchemy.orm import Session
