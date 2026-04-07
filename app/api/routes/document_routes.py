@@ -7,6 +7,12 @@ import os
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
+# ✅ Lazy import for workflow (safe)
+def get_workflow_builder():
+    from app.workflow.workflow_builder import build_workflow_from_steps
+    return build_workflow_from_steps
+
+
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
@@ -30,12 +36,19 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         # Chunk text
         chunks = chunk_text(text)
 
-        # 🚫 Temporarily disabled (for stability)
-        workflow = None
-        stored = 0
+        # ✅ Safe workflow execution
+        build_workflow_from_steps = get_workflow_builder()
+
+        workflow = build_workflow_from_steps(
+            db,
+            chunks,
+            workflow_name=file.filename
+        )
+
+        stored = 0  # embeddings disabled for now
 
         return {
-            "workflow_id": None,
+            "workflow_id": workflow.id if workflow else None,
             "filename": file.filename,
             "chunks_processed": len(chunks),
             "vectors_stored": stored
