@@ -1,17 +1,28 @@
-
+print("DEBUG: main.py start")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+print("DEBUG: importing health_router")
 from app.api.routes.health import router as health_router
+print("DEBUG: importing workflow_router")
 from app.api.routes.workflow_routes import router as workflow_router
+print("DEBUG: importing task_router")
 from app.api.routes.task_routes import router as task_router
+print("DEBUG: importing activity_router")
 from app.api.routes.activity_routes import router as activity_router
+print("DEBUG: importing document_router")
 from app.api.routes.document_routes import router as document_router
+print("DEBUG: importing workflow_graph_router")
 from app.api.routes.workflow_graph_routes import router as workflow_graph_router
+print("DEBUG: importing workflow_intelligence_router")
 from app.api.routes.workflow_intelligence_routes import router as workflow_intelligence_router
+print("DEBUG: importing ai_ops_router")
 from app.api.routes.ai_ops_routes import router as ai_ops_router
+print("DEBUG: importing automation_router")
 from app.api.automation import router as automation_router
+print("DEBUG: importing codegen_router")
 from app.api.codegen import router as codegen_router
+print("DEBUG: importing sop_router")
 from app.api.routes.sop_routes import router as sop_router
 
 from app.database.base import Base
