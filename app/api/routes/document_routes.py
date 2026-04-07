@@ -43,12 +43,12 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         text = text.replace("\x00", "")
         chunks = chunk_text(text)
 
-      	#workflow = build_workflow_from_steps(
+          #workflow = build_workflow_from_steps(
         #    db,
         #    chunks,
         #    workflow_name=file.filename
         #)
-	 workflow = None
+     workflow = None
 
         embeddings = generate_embeddings(chunks)
 
