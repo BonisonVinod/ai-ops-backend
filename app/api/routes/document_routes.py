@@ -13,11 +13,6 @@ print("DEBUG: DB import done")
 from app.workflow.workflow_builder import build_workflow_from_steps
 print("DEBUG: workflow_builder import done")
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from app.services.document_service import extract_text, chunk_text
-from sqlalchemy.orm import Session
-from app.database.session.db import get_db
-from app.workflow.workflow_builder import build_workflow_from_steps
 import os
 import uuid
 
