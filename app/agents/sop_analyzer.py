@@ -56,10 +56,9 @@ def estimate_cost(score: int, steps: int) -> Dict:
 # MAIN ANALYZER
 # -------------------------------
 def analyze_sop(input_text: str) -> Dict:
-
+    # We use the prompt you already wrote because it is structured perfectly
     prompt = f"""
 You are a senior operations consultant.
-
 Analyze the process and break it into steps.
 
 RULES:
@@ -75,10 +74,8 @@ INPUT:
 {input_text}
 
 OUTPUT JSON:
-
 {{
   "process_understanding": "...",
-
   "steps": [
     {{
       "step": "...",
@@ -86,7 +83,6 @@ OUTPUT JSON:
       "reason": "..."
     }}
   ],
-
   "missing_items": [
     {{
       "missing": "...",
@@ -94,7 +90,6 @@ OUTPUT JSON:
       "question": "optional (can be empty)"
     }}
   ],
-
   "automation_plan": [
     "High-level solution"
   ]
@@ -102,19 +97,20 @@ OUTPUT JSON:
 """
 
     try:
+        # FIX 1: Use gpt-4o and add response_format for total stability
         response = client.chat.completions.create(
-            model="gpt-5-mini",
+            model="gpt-4o", 
             messages=[
-                {"role": "system", "content": "You are a practical automation consultant."},
+                {"role": "system", "content": "You are a practical automation consultant. Always return valid JSON."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            response_format={"type": "json_object"}
         )
 
+        # FIX 2: Safe parsing
         parsed = json.loads(response.choices[0].message.content)
 
-        # -------------------------------
-        # STEP FALLBACK
-        # -------------------------------
+        # --- KEEPING YOUR STEP FALLBACK LOGIC ---
         steps = parsed.get("steps", [])
         if not steps:
             steps = [{
@@ -124,32 +120,19 @@ OUTPUT JSON:
             }]
         parsed["steps"] = steps
 
-        # -------------------------------
-        # LIMIT MISSING ITEMS
-        # -------------------------------
+        # --- KEEPING YOUR LIMIT MISSING ITEMS LOGIC ---
         missing_items = parsed.get("missing_items", [])[:3]
-
-        # Clean questions (remove empty)
         for item in missing_items:
             if not item.get("question"):
                 item["question"] = ""
-
         parsed["missing_items"] = missing_items
 
-        # -------------------------------
-        # SCORE
-        # -------------------------------
+        # --- KEEPING YOUR DETERMINISTIC MATH (THE CORE) ---
         factors = derive_factors(input_text)
         score = calculate_score(factors)
-
-        # -------------------------------
-        # COST
-        # -------------------------------
         cost_data = estimate_cost(score, len(steps))
 
-        # -------------------------------
-        # FINAL OUTPUT
-        # -------------------------------
+        # --- FINAL OUTPUT CONSTRUCTION ---
         final_output = {
             **parsed,
             "automation_opportunity": {
@@ -166,6 +149,7 @@ OUTPUT JSON:
         }
 
     except Exception as e:
+        # Safety net to prevent the app from crashing
         return {
             "status": "error",
             "message": str(e)
