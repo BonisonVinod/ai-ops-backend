@@ -1,0 +1,46 @@
+Date,Voucher_No,Party_Name,Ledger_Account,Debit_INR,Credit_INR,Narration,TDS_Deducted,GST_Charged,PF_Applicable,Employee_Basic_Salary
+2026-01-05,VCH-001,Infosys Ltd,Professional Fees,85000,,Payment for IT consulting services,0,Yes,,
+2026-01-08,VCH-002,Ramesh Kumar,Contractor Payment,45000,,Website development work,0,No,,
+2026-01-10,VCH-003,Ravi Shankar,Salary,65000,,Monthly salary - Basic 28000,,,Yes,28000
+2026-01-10,VCH-004,Priya Mehta,Salary,42000,,Monthly salary - Basic 18000,,,Yes,18000
+2026-01-10,VCH-005,Arjun Das,Salary,35000,,Monthly salary - Basic 15500,,,No,15500
+2026-01-12,VCH-006,Amazon Web Services,Cloud Services,125000,,Q4 cloud infrastructure,0,Yes,,
+2026-01-15,VCH-007,Tata Consultancy,Contractor Payment,38000,,System integration work,760,No,,
+2026-01-18,VCH-008,Office Supplies Co,Office Expenses,8500,,Stationery and supplies,0,Yes,,
+2026-01-20,VCH-009,Apex Legal LLP,Legal Fees,95000,,Annual retainer Q4,0,Yes,,
+2026-01-22,VCH-010,Akash Singh,Contractor Payment,32000,,Mobile app testing,0,No,,
+2026-01-25,VCH-011,Global Events Mgmt,Event Management,180000,,Annual conference Dec 2025,0,Yes,,
+2026-01-28,VCH-012,Sunita Rao,Salary,38000,,Monthly salary - Basic 16500,,,Yes,16500
+2026-01-28,VCH-013,Manish Gupta,Salary,55000,,Monthly salary - Basic 22000,,,Yes,22000
+2026-01-30,VCH-014,State Bank of India,Bank Charges,2500,,Q4 bank maintenance charges,0,No,,
+2026-02-03,VCH-015,TechCraft Solutions,Contractor Payment,52000,,Backend API development,1040,No,,
+2026-02-05,VCH-016,Dr. Neha Verma,Professional Fees,40000,,HR policy audit and consulting,0,No,,
+2026-02-08,VCH-017,PrintMasters India,Marketing Expenses,28000,,Brochure design and printing,0,Yes,,
+2026-02-10,VCH-018,Ravi Shankar,Salary,65000,,Monthly salary - Basic 28000,,,Yes,28000
+2026-02-10,VCH-019,Priya Mehta,Salary,42000,,Monthly salary - Basic 18000,,,Yes,18000
+2026-02-10,VCH-020,Arjun Das,Salary,35000,,Monthly salary - Basic 15500,,,No,15500
+2026-02-12,VCH-021,DataVault Analytics,Data Processing,72000,,Q4 analytics subscription,0,Yes,,
+2026-02-15,VCH-022,Vikram Shah,Contractor Payment,29000,,Logo redesign project,0,No,,
+2026-02-18,VCH-023,Apex Legal LLP,Legal Fees,45000,,Trademark registration assistance,0,Yes,,
+2026-02-20,VCH-024,Insurance Corp Ltd,Insurance Premium,38000,,Office insurance renewal,0,No,,
+2026-02-22,VCH-025,Ananya Krishnan,Professional Fees,55000,,CFO advisory services Feb,0,Yes,,
+2026-02-25,VCH-026,Cloud Storage Inc,IT Services,95000,,Annual backup license,0,Yes,,
+2026-02-28,VCH-027,Sunita Rao,Salary,38000,,Monthly salary - Basic 16500,,,Yes,16500
+2026-02-28,VCH-028,Manish Gupta,Salary,55000,,Monthly salary - Basic 22000,,,Yes,22000
+2026-03-03,VCH-029,Ramesh Kumar,Contractor Payment,35000,,Additional website work Feb,0,No,,
+2026-03-05,VCH-030,DigitalMark Agency,Marketing Expenses,220000,,Q4 digital marketing campaign,0,Yes,,
+2026-03-08,VCH-031,Apex Legal LLP,Legal Fees,35000,,Employment contract review,0,Yes,,
+2026-03-10,VCH-032,Ravi Shankar,Salary,65000,,Monthly salary - Basic 28000,,,Yes,28000
+2026-03-10,VCH-033,Priya Mehta,Salary,42000,,Monthly salary - Basic 18000,,,Yes,18000
+2026-03-10,VCH-034,Arjun Das,Salary,35000,,Monthly salary - Basic 15500,,,No,15500
+2026-03-12,VCH-035,Infosys Ltd,Professional Fees,120000,,IT consulting Q4 final installment,0,Yes,,
+2026-03-15,VCH-036,TechCraft Solutions,Contractor Payment,48000,,System testing March,960,No,,
+2026-03-18,VCH-037,Dr. Neha Verma,Professional Fees,35000,,Training session delivery,0,No,,
+2026-03-20,VCH-038,Akash Singh,Contractor Payment,41000,,QA testing sprint 3,0,No,,
+2026-03-22,VCH-039,DataVault Analytics,Data Processing,55000,,Additional analytics work,0,Yes,,
+2026-03-25,VCH-040,Ananya Krishnan,Professional Fees,60000,,CFO advisory March,0,Yes,,
+2026-03-28,VCH-041,Sunita Rao,Salary,38000,,Monthly salary - Basic 16500,,,Yes,16500
+2026-03-28,VCH-042,Manish Gupta,Salary,55000,,Monthly salary - Basic 22000,,,Yes,22000
+2026-03-30,VCH-043,DigitalMark Agency,Marketing Expenses,85000,,Social media management Q4,0,Yes,,
+2026-03-31,VCH-044,Misc Vendors,Petty Cash,12500,,Q4 petty cash reimbursements,0,No,,
+2026-03-31,VCH-045,Year-End Adjustments,Depreciation,45000,,Q4 depreciation on computers,0,No,,

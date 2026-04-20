@@ -1,0 +1,95 @@
+{
+  "domain": "accounting",
+  "version": "2.1",
+  "jurisdiction": "India",
+  "last_updated": "2026-04-20",
+  "standards": [
+    {
+      "id": "IndAS-1",
+      "name": "Presentation of Financial Statements",
+      "description": "Requires fair presentation, going concern assessment, accrual basis, materiality, and consistency.",
+      "agent_rule": "Flag any expense line item exceeding 5% of total revenue as material. Require disclosure note.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "IndAS-2",
+      "name": "Inventories",
+      "description": "Inventories measured at lower of cost and net realizable value. FIFO or weighted-average cost.",
+      "agent_rule": "If inventory value drops below 90% of purchase cost, raise impairment flag. Block auto-write-down.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "IndAS-16",
+      "name": "Property, Plant and Equipment",
+      "description": "Cost model or revaluation model. Depreciation over useful life.",
+      "agent_rule": "Verify depreciation rate against Schedule II of Companies Act 2013. Flag deviations > 2%.",
+      "risk_level": "medium",
+      "human_approval_required": true
+    },
+    {
+      "id": "GST-Reconciliation",
+      "name": "GST Input Tax Credit Reconciliation",
+      "description": "GSTR-2A vs purchase register reconciliation required monthly.",
+      "agent_rule": "Flag any ITC mismatch > ₹1,000. Auto-draft reconciliation note but require CA sign-off.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "TDS-194C",
+      "name": "TDS on Contractor Payments",
+      "description": "1% (individual/HUF) or 2% (others) TDS on contractor payments exceeding ₹30,000 single / ₹1,00,000 aggregate per year.",
+      "agent_rule": "Auto-detect contractor payments. Flag if TDS not deducted on qualifying payments. Do not auto-file without human review.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "TDS-194J",
+      "name": "TDS on Professional Fees",
+      "description": "10% TDS on professional/technical service fees exceeding ₹30,000 per year.",
+      "agent_rule": "Flag professional fee invoices missing TDS deduction. Compute correct TDS amount. Require human confirmation before journal entry.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "PAYROLL-PF",
+      "name": "Provident Fund Compliance",
+      "description": "12% employee + 12% employer contribution on Basic + DA. Monthly EPFO filing by 15th.",
+      "agent_rule": "Verify PF deduction on all employees with Basic > ₹15,000/month. Flag missing deductions. Never auto-remit.",
+      "risk_level": "critical",
+      "human_approval_required": true
+    },
+    {
+      "id": "AUDIT-TRAIL",
+      "name": "Audit Trail Requirement",
+      "description": "Companies Act 2013 + MCA circular: accounting software must maintain tamper-proof audit trail from FY 2023-24.",
+      "agent_rule": "All agent-proposed journal entries must be logged with timestamp, agent_id, and basis. Never delete audit logs.",
+      "risk_level": "critical",
+      "human_approval_required": true
+    }
+  ],
+  "variance_thresholds": {
+    "material_item_pct": 5.0,
+    "inventory_impairment_pct": 10.0,
+    "depreciation_deviation_pct": 2.0,
+    "gst_itc_mismatch_inr": 1000,
+    "tds_trigger_single_inr": 30000,
+    "tds_trigger_annual_inr": 100000
+  },
+  "auto_approvable_actions": [
+    "read_ledger",
+    "compute_variance",
+    "classify_expense_category",
+    "generate_draft_report",
+    "flag_anomaly"
+  ],
+  "blocked_auto_actions": [
+    "post_journal_entry",
+    "file_gst_return",
+    "remit_tds",
+    "remit_pf",
+    "write_off_asset",
+    "approve_payment"
+  ]
+}

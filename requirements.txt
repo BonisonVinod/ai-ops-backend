@@ -139,3 +139,9 @@ wcwidth==0.6.0
 websocket-client==1.9.0
 websockets==16.0
 zipp==3.23.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+langgraph>=0.2.0
+langgraph-checkpoint-sqlite>=2.0.0

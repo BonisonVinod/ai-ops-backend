@@ -1,0 +1,99 @@
+{
+  "domain": "it_compliance",
+  "version": "1.4",
+  "jurisdiction": "India",
+  "last_updated": "2026-04-20",
+  "standards": [
+    {
+      "id": "DPDP-2023",
+      "name": "Digital Personal Data Protection Act 2023",
+      "description": "Governs collection, processing, and storage of personal data of Indian citizens.",
+      "agent_rule": "Any SOP involving PII (name, email, Aadhaar, PAN, phone, biometric) must include a data minimization check. Flag retention periods > 3 years without documented basis.",
+      "risk_level": "critical",
+      "human_approval_required": true,
+      "key_obligations": [
+        "Consent before collection",
+        "Purpose limitation",
+        "Data minimization",
+        "Right to erasure within 72 hours of request",
+        "Breach notification to DPBI within 72 hours"
+      ]
+    },
+    {
+      "id": "IT-ACT-43A",
+      "name": "IT Act Section 43A — Sensitive Personal Data",
+      "description": "Body corporates handling SPDI must implement reasonable security practices (IS/ISO/IEC 27001).",
+      "agent_rule": "Flag any data flow involving financial, health, sexual orientation, or biometric data. Require CISO sign-off.",
+      "risk_level": "critical",
+      "human_approval_required": true
+    },
+    {
+      "id": "ISO-27001",
+      "name": "ISO/IEC 27001:2022 Information Security Management",
+      "description": "ISMS framework. Annex A controls cover access management, encryption, incident response.",
+      "agent_rule": "Verify access controls exist for any automated process writing to production databases. Flag missing MFA, encryption at rest, and log monitoring.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "SEBI-CSCRF",
+      "name": "SEBI Cyber Security and Cyber Resilience Framework",
+      "description": "Mandatory for SEBI-regulated entities. Covers vulnerability assessment, incident reporting, BCP.",
+      "agent_rule": "For financial market workflows, check VAPT frequency (quarterly minimum), patch SLA (critical: 24h, high: 7d), and incident reporting chain.",
+      "risk_level": "critical",
+      "human_approval_required": true
+    },
+    {
+      "id": "CERT-IN-2022",
+      "name": "CERT-In Directions 2022",
+      "description": "Mandatory incident reporting within 6 hours. Log retention minimum 180 days. NTP synchronization.",
+      "agent_rule": "Any automation that handles network logs, access logs, or security events must preserve logs for >= 180 days. Flag any auto-delete rules < 180 days.",
+      "risk_level": "high",
+      "human_approval_required": true
+    },
+    {
+      "id": "RBI-ITGF",
+      "name": "RBI IT Governance Framework (Banks & NBFCs)",
+      "description": "Covers IT strategy, risk, security, business continuity for regulated entities.",
+      "agent_rule": "For banking/NBFC workflows: require dual-control for payment automation, daily reconciliation, and segregation of duties in any agentic process touching Core Banking.",
+      "risk_level": "critical",
+      "human_approval_required": true
+    },
+    {
+      "id": "VAPT-POLICY",
+      "name": "Vulnerability Assessment & Penetration Testing",
+      "description": "Quarterly VAPT for internet-facing systems; annual for internal systems per SEBI/RBI requirements.",
+      "agent_rule": "If deploying new agent endpoint, flag for VAPT scheduling. Do not deploy to production without security sign-off.",
+      "risk_level": "high",
+      "human_approval_required": false
+    },
+    {
+      "id": "ACCESS-MGMT",
+      "name": "Access Management — Principle of Least Privilege",
+      "description": "Agents must operate with minimum necessary permissions. No standing admin access.",
+      "agent_rule": "Validate all tool permissions before execution. Block any tool call requesting write access beyond the declared scope. Log all elevated-permission requests.",
+      "risk_level": "high",
+      "human_approval_required": false
+    }
+  ],
+  "data_classification": {
+    "public": {"retention_years": 1, "encryption_required": false, "human_approval_required": false},
+    "internal": {"retention_years": 3, "encryption_required": false, "human_approval_required": false},
+    "confidential": {"retention_years": 7, "encryption_required": true, "human_approval_required": true},
+    "restricted": {"retention_years": 10, "encryption_required": true, "human_approval_required": true}
+  },
+  "auto_approvable_actions": [
+    "scan_for_pii_fields",
+    "classify_data_sensitivity",
+    "generate_compliance_checklist",
+    "draft_privacy_notice",
+    "check_log_retention_policy"
+  ],
+  "blocked_auto_actions": [
+    "delete_user_data",
+    "export_pii_to_external",
+    "modify_access_controls",
+    "disable_audit_logging",
+    "deploy_to_production"
+  ]
+}
