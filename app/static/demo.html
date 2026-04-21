@@ -303,9 +303,9 @@ Step 6: Send resolution summary to customer via email"
             <div id="langgraph-nodes" class="space-y-1.5"></div>
           </div>
 
-          <!-- Diagnostic questions progress -->
+          <!-- Workflow Manifest progress -->
           <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
-            <div class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">Diagnostic Progress</div>
+            <div class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">Workflow Progress</div>
             <div id="diagnostic-progress" class="space-y-1.5"></div>
           </div>
         </div>
@@ -325,12 +325,7 @@ Step 6: Send resolution summary to customer via email"
 
             <!-- Messages -->
             <div id="chat-messages" class="flex-1 overflow-y-auto p-5 space-y-4">
-              <div class="chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-xs font-semibold text-indigo-400">Co-worker</span>
-                </div>
-                Hi! I'm your Digital Co-worker. Describe the issue you're facing and I'll work through the diagnostic steps with you.
-              </div>
+              <!-- Initial greeting injected by showTestPhase() -->
             </div>
 
             <!-- Typing indicator -->
@@ -525,8 +520,12 @@ Step 9: Send resolution summary to customer via email and close ticket`;
     }
 
     async function streamBuildTerminal(termEl) {
+      // Derive domain from already-fetched analysis or from coworkerConfig if available
+      const domain = state.coworkerConfig?.domain
+        || state.analysis?.frontend_payload?.domain
+        || 'general';
       return new Promise((resolve) => {
-        const evtSrc = new EventSource('/ai/build/stream');
+        const evtSrc = new EventSource(`/ai/build/stream?domain=${encodeURIComponent(domain)}`);
         const progressSteps = [10, 35, 65, 90];
         let stepIdx = 0;
 
@@ -580,8 +579,22 @@ Step 9: Send resolution summary to customer via email and close ticket`;
       // Render LangGraph nodes
       renderLangGraphNodes(config.langgraph_nodes || []);
 
-      // Render diagnostic question progress
-      renderDiagnosticProgress(config.diagnostic_questions || [], 0);
+      // Render Workflow Manifest as progress steps
+      const manifestSteps = config.workflow_manifest?.length
+        ? config.workflow_manifest
+        : (config.diagnostic_questions || []);
+      renderDiagnosticProgress(manifestSteps, 0);
+
+      // Inject domain-specific initial greeting
+      const greeting = config.initial_greeting ||
+        "Hi! I'm your Digital Co-worker. Describe your task and I'll work through it with you.";
+      document.getElementById('chat-messages').innerHTML = `
+        <div class="chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs font-semibold text-indigo-400">Co-worker</span>
+          </div>
+          ${escapeHtml(greeting)}
+        </div>`;
     }
 
     function renderLangGraphNodes(nodes) {
@@ -654,11 +667,11 @@ Step 9: Send resolution summary to customer via email and close ticket`;
           state.conversationHistory.push({ role: 'assistant', content: data.response });
           state.diagnosticStep = data.diagnostic_step;
 
-          // Update diagnostic progress
-          renderDiagnosticProgress(
-            state.coworkerConfig.diagnostic_questions,
-            data.diagnostic_step - 1
-          );
+          // Update workflow manifest progress
+          const manifestSteps = state.coworkerConfig.workflow_manifest?.length
+            ? state.coworkerConfig.workflow_manifest
+            : (state.coworkerConfig.diagnostic_questions || []);
+          renderDiagnosticProgress(manifestSteps, data.diagnostic_step - 1);
 
           // Highlight active LangGraph node
           highlightActiveNode(data.diagnostic_step);
@@ -695,20 +708,26 @@ Step 9: Send resolution summary to customer via email and close ticket`;
     function clearChat() {
       state.conversationHistory = [];
       state.diagnosticStep = 0;
+      const greeting = state.coworkerConfig?.initial_greeting ||
+        "Hi! I'm your Digital Co-worker. Chat cleared — describe your task and I'll start fresh.";
       document.getElementById('chat-messages').innerHTML = `
         <div class="chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg">
           <div class="flex items-center gap-2 mb-2"><span class="text-xs font-semibold text-indigo-400">Co-worker</span></div>
-          Chat cleared. Describe the issue you're facing and I'll start fresh.
+          ${escapeHtml(greeting)}
         </div>`;
       if (state.coworkerConfig) {
-        renderDiagnosticProgress(state.coworkerConfig.diagnostic_questions, 0);
+        const steps = state.coworkerConfig.workflow_manifest?.length
+          ? state.coworkerConfig.workflow_manifest
+          : (state.coworkerConfig.diagnostic_questions || []);
+        renderDiagnosticProgress(steps, 0);
       }
     }
 
     function highlightActiveNode(step) {
       const nodes = state.coworkerConfig?.langgraph_nodes || [];
-      // Map diagnostic step to a node index (rough heuristic)
-      const nodeIdx = Math.min(Math.floor((step / 6) * nodes.length), nodes.length - 1);
+      const manifest = state.coworkerConfig?.workflow_manifest || state.coworkerConfig?.diagnostic_questions || [];
+      const totalSteps = manifest.length || 1;
+      const nodeIdx = Math.min(Math.floor((step / totalSteps) * nodes.length), nodes.length - 1);
       nodes.forEach((n, i) => {
         const el = document.getElementById(`node-${n.id}`);
         if (el) el.classList.toggle('active', i === nodeIdx);

@@ -77,6 +77,9 @@ class FactoryState(TypedDict):
     # Human-in-the-loop
     human_feedback: Optional[str]
 
+    # Workflow Manifest — ordered human-readable steps specific to this JD/domain
+    workflow_manifest: Optional[list[str]]
+
     # Output
     final_output: Optional[str]
     frontend_payload: Optional[dict]         # user-facing card data (summary, category, pro_tip)
@@ -176,6 +179,21 @@ _SYNTHESIZE_PROMPT = ChatPromptTemplate.from_messages([
 
 _HIGH_RISK_TOOLS = {"execute_python", "generate_code"}
 
+_MANIFEST_PROMPT = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "You are a workflow architect. Given a JD/SOP task description and its detected domain, "
+        "generate a concise ordered list of 5–8 workflow steps that this digital co-worker will execute. "
+        "Each step must be a short action phrase of 3–6 words. "
+        "Accounting example: [\"Verify Invoice\", \"Check TDS Compliance\", \"Match GST ITC\", "
+        "\"Reconcile Ledger\", \"Flag Discrepancies\", \"Generate Report\"]. "
+        "Customer Support example: [\"Receive Query\", \"Classify Issue\", \"Run Diagnostics\", "
+        "\"Match Knowledge Base\", \"Escalation Gate\", \"Resolve & Close\"]. "
+        "Return ONLY a valid JSON array of strings — no markdown, no extra keys.",
+    ),
+    ("human", "Domain: {domain}\nTask/JD:\n{task}"),
+])
+
 
 # ---------------------------------------------------------------------------
 # Graph nodes
@@ -183,8 +201,16 @@ _HIGH_RISK_TOOLS = {"execute_python", "generate_code"}
 
 _CUSTOMER_OPS_SIGNALS = {
     "troubleshooting", "troubleshoot", "escalation", "escalate",
-    "diagnostic", "diagnose", "sop", "support", "helpdesk", "runbook",
+    "diagnostic", "diagnose", "support", "helpdesk", "runbook",
     "playbook", "triage", "incident response", "call script",
+}
+
+# Keywords that exclusively signal accounting — MUST block customer_operations detection
+_ACCOUNTING_EXCLUSIVE_SIGNALS = {
+    "accountant", "accountants", "tds", "gst", "ledger", "ledgers",
+    "itc", "gstr", "tally", "zoho books", "balance sheet", "journal entry",
+    "accounts payable", "accounts receivable", "bookkeeping",
+    "tax deducted at source", "input tax credit",
 }
 
 _FUNCTIONAL_PURPOSE_MAP = {
@@ -202,19 +228,22 @@ def ingest_analysis(state: FactoryState) -> dict:
     task_lower = task.lower()
     report = state.get("analysis_report") or {}
 
-    # Determine domain — customer_operations takes priority when support signals detected
     domain_hint = "general"
     functional_purpose = "General Workflow Automation"
 
-    if any(sig in task_lower for sig in _CUSTOMER_OPS_SIGNALS):
-        domain_hint = "customer_operations"
-        functional_purpose = "Customer Operations"
+    # Accounting-exclusive signals take highest priority — they block customer_operations
+    if any(sig in task_lower for sig in _ACCOUNTING_EXCLUSIVE_SIGNALS):
+        domain_hint = "accounting"
+        functional_purpose = "Finance & Accounting"
     elif "account" in task_lower or "audit" in task_lower or "financial" in task_lower:
         domain_hint = "accounting"
         functional_purpose = "Finance & Accounting"
     elif "compliance" in task_lower or "legal" in task_lower:
         domain_hint = "it_compliance"
         functional_purpose = "IT Compliance & Security"
+    elif any(sig in task_lower for sig in _CUSTOMER_OPS_SIGNALS):
+        domain_hint = "customer_operations"
+        functional_purpose = "Customer Operations"
     elif report:
         sop_type = report.get("type", "").lower()
         if sop_type in ("sop", "jd"):
@@ -304,11 +333,28 @@ def plan_actions(state: FactoryState) -> dict:
         tools = ["read_csv_as_json"] if ".csv" in task.lower() else ["browser_search"]
         inputs = [task]
 
+    # Generate a domain-specific Workflow Manifest (human-readable step labels)
+    manifest: list[str] = []
+    try:
+        manifest_chain = _MANIFEST_PROMPT | _get_llm()
+        manifest_resp = manifest_chain.invoke({"domain": domain, "task": task[:1500]})
+        mc = manifest_resp.content.strip()
+        if mc.startswith("```"):
+            mc = mc.split("```")[1]
+            if mc.startswith("json"):
+                mc = mc[4:]
+        parsed = json.loads(mc)
+        if isinstance(parsed, list):
+            manifest = [str(s) for s in parsed]
+    except Exception:
+        pass  # manifest stays empty; frontend falls back to generic steps
+
     return {
         "planned_actions": tools,
         "planned_action_inputs": inputs,
         "current_action_index": 0,
-        "messages": [AIMessage(content=f"[Plan] Tools to invoke: {tools}")],
+        "workflow_manifest": manifest,
+        "messages": [AIMessage(content=f"[Plan] Tools: {tools} | Manifest: {manifest}")],
     }
 
 
@@ -554,6 +600,7 @@ def _build_frontend_payload(state: FactoryState, report_text: str) -> dict:
         "pro_tip": pro_tip,
         "domain": domain,
         "step_count": step_count,
+        "workflow_manifest": state.get("workflow_manifest") or [],
     }
 
 
@@ -677,6 +724,7 @@ def _make_initial_state(
         "human_review_required": False,
         "high_risk_action_pending": None,
         "human_feedback": None,
+        "workflow_manifest": None,
         "final_output": None,
         "frontend_payload": None,
         "messages": [],

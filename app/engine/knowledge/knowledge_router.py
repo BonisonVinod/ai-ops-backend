@@ -54,6 +54,21 @@ DOMAIN_KEYWORDS = {
 }
 
 # ---------------------------------------------------------------------------
+# Accounting-exclusive keywords — presence of ANY of these MUST block
+# customer_operations domain classification regardless of other signals.
+# ---------------------------------------------------------------------------
+
+ACCOUNTING_EXCLUSIVE_KEYWORDS: set[str] = {
+    "accountant", "accountants", "tds", "gst", "ledger", "ledgers",
+    "itc", "gstr", "tally", "zoho books", "balance sheet", "journal entry",
+    "accounts payable", "accounts receivable", "bookkeeping", "invoice matching",
+    "tax deducted at source", "input tax credit", "gst reconciliation",
+}
+
+# Domains that are suppressed when accounting-exclusive keywords are detected
+_ACCOUNTING_EXCLUSIVE_BLOCKS: set[str] = {"customer_operations"}
+
+# ---------------------------------------------------------------------------
 # MCP server detection keywords
 # ---------------------------------------------------------------------------
 
@@ -141,8 +156,11 @@ _CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
         "system",
         "Classify the given SOP or task description into one or more knowledge domains. "
         "Available domains: accounting, it_compliance, customer_operations, hr_compliance, general. "
-        "Use 'customer_operations' for anything involving troubleshooting guides, support SOPs, "
-        "escalation procedures, diagnostic runbooks, or helpdesk workflows. "
+        "CRITICAL RULE: If the text contains any of the following terms — accountant, TDS, GST, "
+        "ledger, ITC, GSTR, balance sheet, accounts payable, accounts receivable — you MUST classify "
+        "as 'accounting' and MUST NOT include 'customer_operations'. "
+        "Use 'customer_operations' ONLY for troubleshooting guides, support SOPs, escalation procedures, "
+        "diagnostic runbooks, or helpdesk workflows that contain NO accounting/finance terminology. "
         "Return JSON with: domains (list), confidence (float), reasoning (string).",
     ),
     ("human", "Task/SOP description:\n{text}"),
@@ -218,13 +236,35 @@ class KnowledgeRouter:
     # ------------------------------------------------------------------
 
     def _classify_domains(self, text: str) -> list[str]:
-        # Fast keyword pre-check
+        text_lower = text.lower()
+
+        # Exclusive accounting check — MUST block competing domains if triggered
+        accounting_exclusive_hit = any(kw in text_lower for kw in ACCOUNTING_EXCLUSIVE_KEYWORDS)
+
         keyword_domains = self._keyword_classify(text)
+
+        # Strip blocked domains from keyword results immediately
+        if accounting_exclusive_hit:
+            keyword_domains = [d for d in keyword_domains if d not in _ACCOUNTING_EXCLUSIVE_BLOCKS]
+            if "accounting" not in keyword_domains:
+                keyword_domains.append("accounting")
 
         try:
             result = self.classify_chain.invoke({"text": text})
             llm_domains = result.get("domains", []) if isinstance(result, dict) else []
-            merged = list(set(keyword_domains + [d for d in llm_domains if d in DOMAIN_REGISTRY]))
+
+            # LLM verification: honour exclusive block regardless of LLM output
+            if accounting_exclusive_hit:
+                llm_domains = [d for d in llm_domains if d not in _ACCOUNTING_EXCLUSIVE_BLOCKS]
+
+            _known = set(DOMAIN_REGISTRY) | {"accounting", "it_compliance", "hr_compliance",
+                                              "customer_operations", "general"}
+            merged = list(set(keyword_domains + [d for d in llm_domains if d in _known]))
+
+            # Final guard — exclusive block cannot be undone
+            if accounting_exclusive_hit:
+                merged = [d for d in merged if d not in _ACCOUNTING_EXCLUSIVE_BLOCKS]
+
             return merged if merged else ["general"]
         except Exception:
             if self.fallback_to_keywords:

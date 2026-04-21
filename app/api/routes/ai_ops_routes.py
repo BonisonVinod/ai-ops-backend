@@ -85,26 +85,38 @@ def build_coworker(req: BuildRequest):
 # GET /ai/build/stream — SSE terminal animation for the Build phase
 # -----------------------------------------------------------------------
 
+_DOMAIN_INTELLIGENCE_LABELS = {
+    "accounting": "Finance & Accounting Intelligence",
+    "it_compliance": "IT Compliance Intelligence",
+    "hr_compliance": "HR & People Ops Intelligence",
+    "customer_operations": "Customer Operations Intelligence",
+    "general": "Workflow Intelligence",
+}
+
+
 @router.get("/build/stream")
-async def build_stream(sovereign: bool = False):
+async def build_stream(sovereign: bool = False, domain: str = "general"):
     """
     Server-Sent Events stream that drives the Live Terminal animation.
+    Pass ?domain=accounting (or other domain) for domain-aware messages.
     Pass ?sovereign=true to emit data-sovereignty audit messages.
     """
+    intel_label = _DOMAIN_INTELLIGENCE_LABELS.get(domain, "Workflow Intelligence")
+
     async def event_gen():
         steps = [
             ("progress", "Initializing Environment..."),
-            ("progress", "Injecting Support Intelligence..."),
-            ("progress", "Wiring 7-node LangGraph..."),
+            ("progress", f"Injecting {intel_label}..."),
+            ("progress", f"Wiring {7}-node LangGraph for {intel_label}..."),
             ("progress", "Finalizing Sandbox Persistence..."),
         ]
         if sovereign:
             steps = [
                 ("progress",  "Initializing Sovereign Environment..."),
                 ("local",     "[LOCAL EXECUTION] Verifying local MCP bridge at localhost:8765 — OK"),
-                ("progress",  "Injecting Support Intelligence (rules loaded locally)..."),
+                ("progress",  f"Injecting {intel_label} (rules loaded locally)..."),
                 ("local",     "[LOCAL EXECUTION] Knowledge rules applied on-device — not uploaded to cloud"),
-                ("progress",  "Wiring 7-node LangGraph with local connectors..."),
+                ("progress",  f"Wiring 7-node LangGraph with local connectors for {intel_label}..."),
                 ("local",     "[LOCAL EXECUTION] All tool calls routed to local Docker stack"),
                 ("progress",  "Finalizing Sovereign Sandbox..."),
                 ("shield",    "Privacy Shield active — your data stays on your machine ✓"),
@@ -221,7 +233,7 @@ def coworker_chat(req: ChatRequest):
 
 _DOMAIN_KEYWORDS_BUILD = {
     "customer_operations": {
-        "troubleshoot", "escalat", "diagnostic", "sop", "support",
+        "troubleshoot", "escalat", "diagnostic", "support",
         "helpdesk", "runbook", "triage", "ticket", "incident response",
     },
     "accounting": {
@@ -236,6 +248,14 @@ _DOMAIN_KEYWORDS_BUILD = {
         "recruitment", "onboarding", "performance", "termination", "leave",
         "appraisal", "hiring",
     },
+}
+
+# Accounting-exclusive keywords — presence BLOCKS customer_operations classification
+_ACCOUNTING_EXCLUSIVE_KEYWORDS_BUILD = {
+    "accountant", "accountants", "tds", "gst", "ledger", "ledgers",
+    "itc", "gstr", "tally", "zoho books", "balance sheet", "journal entry",
+    "accounts payable", "accounts receivable", "bookkeeping",
+    "tax deducted at source", "input tax credit",
 }
 
 _SKILL_TO_TOOL_BUILD = {
@@ -254,6 +274,11 @@ def _detect_domain_from_analysis(analysis: dict) -> str:
         analysis.get("process_understanding", "") + " " +
         " ".join(analysis.get("required_ai_skills", []))
     ).lower()
+
+    # Exclusive accounting keywords take priority and block customer_operations
+    if any(kw in text for kw in _ACCOUNTING_EXCLUSIVE_KEYWORDS_BUILD):
+        return "accounting"
+
     for domain, kws in _DOMAIN_KEYWORDS_BUILD.items():
         if any(kw in text for kw in kws):
             return domain
@@ -289,42 +314,148 @@ def _detect_tools_from_analysis(analysis: dict, agent_spec: Optional[dict]) -> l
     return list(tools) or ["browser_search"]
 
 
-def _diagnostic_questions_for(domain: str) -> list[str]:
-    if domain == "customer_operations":
-        return [
-            "What device, service, or feature is affected?",
-            "When did this issue first start?",
-            "What error message or symptom are you seeing?",
-            "Have you tried restarting or refreshing?",
-            "Is this affecting just you or multiple users?",
-            "What was the last change made before the issue started?",
-        ]
-    if domain == "accounting":
-        return [
-            "Which financial period does this relate to?",
-            "What is the transaction or entry type?",
-            "Which accounts or cost centers are involved?",
-            "Has this been approved by the relevant authority?",
-            "Are there supporting documents attached?",
-            "Does this require regulatory reporting or compliance review?",
-        ]
-    if domain == "it_compliance":
-        return [
-            "What system or data category is involved?",
-            "What is the data classification level at risk?",
-            "When was the potential breach or violation detected?",
-            "Which regulatory framework applies (GDPR, DPDP, etc.)?",
-            "Has the incident been logged in the ITSM system?",
-            "Does this require escalation to CERT-In or DPA?",
-        ]
-    return [
+_STATIC_QUESTIONS: dict[str, list[str]] = {
+    "customer_operations": [
+        "What device, service, or feature is affected?",
+        "When did this issue first start?",
+        "What error message or symptom are you seeing?",
+        "Have you tried restarting or refreshing?",
+        "Is this affecting just you or multiple users?",
+        "What was the last change made before the issue started?",
+    ],
+    "accounting": [
+        "Please provide the Ledger CSV or transaction file for analysis.",
+        "What is the TDS deduction category for this transaction?",
+        "Please confirm the GST ITC claim amount and invoice number.",
+        "Which financial period does this reconciliation cover?",
+        "Are there discrepancies between the vendor invoice and purchase order?",
+        "Does this entry require approval from the Finance Controller?",
+    ],
+    "it_compliance": [
+        "What system or data category is involved?",
+        "What is the data classification level at risk?",
+        "When was the potential breach or violation detected?",
+        "Which regulatory framework applies (GDPR, DPDP, etc.)?",
+        "Has the incident been logged in the ITSM system?",
+        "Does this require escalation to CERT-In or DPA?",
+    ],
+    "general": [
         "What is the primary objective of this task?",
         "What inputs or documents are required?",
         "Are there any approval or review gates needed?",
         "What is the expected output or outcome?",
         "Are there any exceptions or edge cases to handle?",
         "Who is the stakeholder or approver for final sign-off?",
-    ]
+    ],
+}
+
+
+def _diagnostic_questions_for(domain: str, analysis: Optional[dict] = None) -> list[str]:
+    """
+    Generate domain-specific diagnostic questions.
+    When analysis context is provided, attempts LLM-generated questions tailored to the JD.
+    Falls back to static domain questions on any failure.
+    """
+    fallback = _STATIC_QUESTIONS.get(domain, _STATIC_QUESTIONS["general"])
+
+    if not analysis:
+        return fallback
+
+    process = analysis.get("process_understanding", "")
+    steps_text = " | ".join(
+        s.get("step", str(s)) if isinstance(s, dict) else str(s)
+        for s in analysis.get("steps", [])[:6]
+    )
+    if not process and not steps_text:
+        return fallback
+
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import ChatPromptTemplate
+
+        _q_prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "You are a workflow expert. Given a job role/SOP description and its domain, generate "
+                "5–7 precise intake questions that a digital co-worker should ask to gather the information "
+                "it needs to execute its workflow. Questions must be specific to the domain — never generic "
+                "support questions like 'When did the issue start?' for an accounting context. "
+                "For accounting: ask for ledger files, invoice numbers, TDS categories, GST period, etc. "
+                "Return ONLY a JSON array of question strings.",
+            ),
+            ("human", "Domain: {domain}\nProcess: {process}\nSOP Steps: {steps}"),
+        ])
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+        resp = (_q_prompt | llm).invoke({"domain": domain, "process": process[:600], "steps": steps_text[:400]})
+        content = resp.content.strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        questions = json.loads(content)
+        if isinstance(questions, list) and len(questions) >= 3:
+            return [str(q) for q in questions]
+    except Exception:
+        pass
+
+    return fallback
+
+
+def _generate_workflow_manifest(domain: str, analysis: Optional[dict] = None) -> list[str]:
+    """
+    Generate a concise ordered list of workflow step labels specific to the JD/SOP.
+    Used as the progress bar in the Test UI.
+    """
+    fallback_manifests = {
+        "accounting": ["Verify Invoice", "Check TDS Compliance", "Match GST ITC",
+                       "Reconcile Ledger", "Flag Discrepancies", "Generate Report"],
+        "customer_operations": ["Receive Query", "Classify Issue", "Run Diagnostics",
+                                 "Match Knowledge Base", "Escalation Gate", "Resolve & Close"],
+        "it_compliance": ["Ingest Incident", "Classify Severity", "Apply Compliance Rules",
+                          "Risk Assessment", "Notification Gate", "Regulatory Report"],
+        "general": ["Ingest Task", "Load Domain Rules", "Execute Steps",
+                    "Human Review Gate", "Generate Output"],
+    }
+    fallback = fallback_manifests.get(domain, fallback_manifests["general"])
+
+    if not analysis:
+        return fallback
+
+    process = analysis.get("process_understanding", "")
+    steps_text = " | ".join(
+        s.get("step", str(s)) if isinstance(s, dict) else str(s)
+        for s in analysis.get("steps", [])[:8]
+    )
+
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import ChatPromptTemplate
+
+        _m_prompt = ChatPromptTemplate.from_messages([
+            (
+                "system",
+                "Generate a concise ordered list of 5–8 workflow step labels for a digital co-worker. "
+                "Each label must be a short action phrase (3–6 words). "
+                "Accounting example: [\"Verify Invoice\", \"Check TDS Compliance\", \"Match GST ITC\", "
+                "\"Reconcile Ledger\", \"Flag Discrepancies\", \"Generate Report\"]. "
+                "Return ONLY a valid JSON array of strings.",
+            ),
+            ("human", "Domain: {domain}\nProcess: {process}\nSOP Steps: {steps}"),
+        ])
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+        resp = (_m_prompt | llm).invoke({"domain": domain, "process": process[:600], "steps": steps_text[:600]})
+        content = resp.content.strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        manifest = json.loads(content)
+        if isinstance(manifest, list) and len(manifest) >= 3:
+            return [str(s) for s in manifest]
+    except Exception:
+        pass
+
+    return fallback
 
 
 def _langgraph_nodes_for(domain: str, steps: list) -> list[dict]:
@@ -398,6 +529,31 @@ def _generate_system_prompt(process: str, domain: str, questions: list, steps: l
     )
 
 
+_INITIAL_GREETING: dict[str, str] = {
+    "customer_operations": (
+        "Hi! I'm your Customer Operations Co-worker. "
+        "Describe the issue you're facing and I'll work through the diagnostic steps with you."
+    ),
+    "accounting": (
+        "Hello! I'm your Finance & Accounting Co-worker. "
+        "Please provide the Ledger CSV or transaction details for analysis, "
+        "and I'll guide you through the compliance and reconciliation workflow."
+    ),
+    "it_compliance": (
+        "Hi! I'm your IT Compliance Co-worker. "
+        "Please describe the incident or compliance concern and I'll run through the assessment workflow."
+    ),
+    "hr_compliance": (
+        "Hi! I'm your HR & People Ops Co-worker. "
+        "Please describe the HR scenario or query and I'll guide you through the process."
+    ),
+    "general": (
+        "Hi! I'm your Digital Co-worker. "
+        "Describe your task or query and I'll work through the workflow with you."
+    ),
+}
+
+
 def _generate_coworker_config(analysis: dict, agent_spec: Optional[dict]) -> dict:
     sop_type   = analysis.get("type", "SOP")
     process    = analysis.get("process_understanding", "Workflow Automation")
@@ -405,9 +561,11 @@ def _generate_coworker_config(analysis: dict, agent_spec: Optional[dict]) -> dic
     domain     = _detect_domain_from_analysis(analysis)
     purpose    = _detect_functional_purpose(analysis, domain)
     tools      = _detect_tools_from_analysis(analysis, agent_spec)
-    questions  = _diagnostic_questions_for(domain)
+    questions  = _diagnostic_questions_for(domain, analysis)
+    manifest   = _generate_workflow_manifest(domain, analysis)
     nodes      = _langgraph_nodes_for(domain, steps)
     sys_prompt = _generate_system_prompt(process, domain, questions, steps)
+    greeting   = _INITIAL_GREETING.get(domain, _INITIAL_GREETING["general"])
 
     precision = analysis.get("precision_analysis", {})
     business  = analysis.get("business_metrics", {})
@@ -423,6 +581,8 @@ def _generate_coworker_config(analysis: dict, agent_spec: Optional[dict]) -> dic
         "langgraph_nodes": nodes,
         "node_count": len(nodes),
         "diagnostic_questions": questions,
+        "workflow_manifest": manifest,
+        "initial_greeting": greeting,
         "system_prompt": sys_prompt,
         "sop_steps": [
             s.get("step", str(s)) if isinstance(s, dict) else str(s)
