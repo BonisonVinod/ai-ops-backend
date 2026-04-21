@@ -1,10 +1,11 @@
-# BUILD REPORT — Agentic Factory Foundation
+# BUILD REPORT — Agentic Factory Foundation + Execution API
 
 **Build Date:** 2026-04-20  
 **Build Mode:** Autonomous (`claude -y`)  
 **Architect:** Claude Code (Sonnet 4.6)  
 **Project:** ai-ops-backend — Transition from Analysis Tool → Agent Factory  
-**Test Result:** ✅ 5/5 tests passed
+**Test Result:** ✅ 5/5 tests passed  
+**API Layer:** ✅ 5 new endpoints live, server verified
 
 ---
 
@@ -321,19 +322,53 @@ if analysis["analysis"]["type"] == "SOP":
     result = agent.run(csv_file_path, "Q4 FY 2025-26")
 ```
 
-### Add API routes
+### API Routes (Now Live)
 
-```python
-# app/api/routes/engine_routes.py
-POST /engine/run     → run_factory(task, thread_id)
-POST /engine/resume  → run_factory(task, thread_id, human_feedback)
-POST /engine/audit   → AccountingAuditAgent().run(csv_path, period)
-POST /engine/audit/resume → AccountingAuditAgent().resume(thread_id, feedback)
+All routes are registered in `app/main.py` and verified on server startup.
+
+```
+POST /engine/run                 Run factory for any task
+POST /engine/resume              Resume thread after human interrupt
+GET  /engine/status/{thread_id}  Inspect persisted thread state
+POST /engine/audit/run           Upload CSV + start accounting audit
+POST /engine/audit/resume        Resume audit after CA review
+
+POST /sop/analyze                Analyze SOP/JD (static spec, no execution)
+POST /sop/analyze-and-run        Analyze + immediately run in the factory
+```
+
+### Full API Flow (Analyze → Run → Human Review → Resume)
+
+```
+# Step 1: Analyze + run
+POST /sop/analyze-and-run
+  Body: { "input": "Process monthly TDS reconciliation", "auto_run": true }
+  Returns: { "status": "awaiting_review", "thread_id": "sop-abc123", ... }
+
+# Step 2: Human reviews the output, then resumes
+POST /engine/resume
+  Body: { "thread_id": "sop-abc123", "task": "...", "human_feedback": "approved" }
+  Returns: { "status": "completed", "final_output": "..." }
+```
+
+### Audit-Specific Flow (CSV Upload)
+
+```
+# Step 1: Upload ledger CSV
+POST /engine/audit/run
+  Form: file=<ledger.csv>, audit_period="Q4 FY 2025-26"
+  Returns: { "status": "awaiting_review", "thread_id": "audit-xyz", "tds_flags": [...] }
+
+# Step 2: CA reviews flags + proposals, then approves
+POST /engine/audit/resume
+  Body: { "thread_id": "audit-xyz", "human_feedback": "approved: all TDS entries verified" }
+  Returns: { "status": "completed", "audit_memo": "..." }
 ```
 
 ### CORS + Frontend
 
-The `factory_checkpoints.db` and `audit_checkpoints.db` files are auto-created at the project root on first run. For production (Render), set these paths to `/tmp/` or use PostgreSQL checkpointer.
+The `factory_checkpoints.db` and `audit_checkpoints.db` files are auto-created at the project root on first run.  
+For production (Render), set `FACTORY_DB_PATH=/tmp/factory.db` and `AUDIT_DB_PATH=/tmp/audit.db`.
 
 ---
 
@@ -358,9 +393,33 @@ The `factory_checkpoints.db` and `audit_checkpoints.db` files are auto-created a
 | In-memory SQLite for tests | Intentional (no disk state) | Production uses file-based or PostgreSQL |
 | `accounting_rules.json` is static | Functional for v1 | Connect to live IndAS/CBDT update feed |
 | `it_compliance.json` covers India only | Intentional scope | Add GDPR, SOC2 modules for international |
-| No API routes wired yet | Out of scope for this build | Create `app/api/routes/engine_routes.py` |
+| ~~No API routes wired yet~~ | ✅ Done — 5 endpoints live | — |
 | Composer LLM plan can select wrong tool | Fallback to `browser_search` | Add few-shot examples to `_PLAN_PROMPT` |
+| `analyze-and-run` calls LLM twice (analyze + factory) | Acceptable for v1 | Cache analysis result in thread state |
+| File upload CSV saved to `/tmp` | Works on Render | Set retention policy or stream directly |
 
 ---
 
-*Built autonomously by Claude Code on 2026-04-20 during a 90-minute unattended session.*
+## Cumulative File Manifest
+
+| File | Role | Session |
+|---|---|---|
+| `app/engine/composer.py` | LangGraph Agent Factory — 7-node StateMachine | 1 |
+| `app/engine/tools/browser_tool.py` | DuckDuckGo web search | 1 |
+| `app/engine/tools/document_tool.py` | PDF/DOCX/CSV/TXT extractor | 1 |
+| `app/engine/tools/code_tool.py` | Sandboxed Python exec + code gen | 1 |
+| `app/engine/knowledge/knowledge_router.py` | Domain classifier + rule injector | 2 |
+| `app/engine/knowledge/accounting_router.py` | Accounting LangChain chain | 1 |
+| `app/engine/knowledge/compliance_router.py` | Compliance LangChain chain | 1 |
+| `app/engine/knowledge/rules/accounting_rules.json` | 8 IndAS/TDS/GST/PF standards | 2 |
+| `app/engine/knowledge/rules/it_compliance.json` | 8 DPDP/ISO27001/SEBI standards | 2 |
+| `app/engine/agents/accounting_audit_agent.py` | Prototype 6-node audit agent | 2 |
+| `app/api/routes/engine_routes.py` | **NEW** — 5 execution API endpoints | 3 |
+| `app/api/routes/sop_routes.py` | Upgraded + analyze-and-run endpoint | 3 |
+| `app/services/agent_spec_service.py` | Upgraded + factory_run_spec output | 3 |
+| `tests/data/sample_ledger_q4_fy2526.csv` | Dummy Q4 FY26 ledger (45 rows) | 2 |
+| `tests/test_accounting_audit.py` | Autonomous test suite (5/5 pass) | 2 |
+
+---
+
+*Built autonomously by Claude Code across 3 sessions on 2026-04-20.*

@@ -38,6 +38,7 @@ from app.engine.tools import (
     execute_python,
     generate_code,
 )
+from app.engine.tools.mcp_manager import get_mcp_manager, layman_name
 from app.engine.knowledge.knowledge_router import KnowledgeRouter, KnowledgeContext
 from app.engine.knowledge.accounting_router import AccountingRouter
 from app.engine.knowledge.compliance_router import ComplianceRouter
@@ -57,6 +58,7 @@ class FactoryState(TypedDict):
     knowledge_domain: Optional[str]
     knowledge_context: Optional[dict]        # serialized KnowledgeContext
     domain_analysis: Optional[dict]
+    functional_purpose: Optional[str]        # human-readable intent (e.g. "Customer Operations")
 
     # Action planning
     planned_actions: list[str]               # ordered list of tool names to invoke
@@ -68,11 +70,16 @@ class FactoryState(TypedDict):
     human_review_required: bool
     high_risk_action_pending: Optional[str]  # which action triggered the interrupt
 
+    # MCP integrations
+    required_mcp_servers: list[str]        # server IDs flagged by KnowledgeRouter
+    mcp_tool_results: Annotated[list[str], add]
+
     # Human-in-the-loop
     human_feedback: Optional[str]
 
     # Output
     final_output: Optional[str]
+    frontend_payload: Optional[dict]         # user-facing card data (summary, category, pro_tip)
     messages: Annotated[list[BaseMessage], add]
     error: Optional[str]
 
@@ -129,16 +136,23 @@ _PLAN_PROMPT = ChatPromptTemplate.from_messages([
         "  - read_csv_as_json: read a CSV file and return JSON rows\n"
         "  - execute_python: run Python code for calculations/analysis\n"
         "  - generate_code: write Python code for a described task\n\n"
+        "MCP tools (use when the server is listed in required_mcp_servers):\n"
+        "  - mcp:gmail:send_email — Send Official Email\n"
+        "  - mcp:gmail:list_messages — View Inbox Messages\n"
+        "  - mcp:google_sheets:append_values — Add Rows to Spreadsheet\n"
+        "  - mcp:google_sheets:get_values — Read Spreadsheet Data\n"
+        "  - mcp:slack:post_message — Send a Slack Message\n"
+        "MCP tool names follow the pattern: mcp:<server_id>:<tool_name>\n\n"
         "Return ONLY a JSON object with:\n"
         "  tools: list of tool names in execution order\n"
-        "  inputs: list of input strings for each tool (same order)\n"
-        "Example: {{\"tools\": [\"read_csv_as_json\", \"execute_python\"], "
-        "\"inputs\": [\"/path/to/file.csv\", \"print(data)\"]}}",
+        "  inputs: list of input strings (or JSON objects) for each tool (same order)\n"
+        "Example: {{\"tools\": [\"read_csv_as_json\", \"mcp:google_sheets:append_values\"], "
+        "\"inputs\": [\"/path/to/file.csv\", \"{{\\\"spreadsheetId\\\": \\\"abc\\\", \\\"range\\\": \\\"Sheet1!A1\\\", \\\"values\\\": []}}\"]}}",
     ),
     (
         "human",
-        "Task: {task}\n\nDomain: {domain}\n\nKnowledge Rules Summary:\n{rules_summary}\n\n"
-        "Analysis Report:\n{analysis_report}",
+        "Task: {task}\n\nDomain: {domain}\n\nRequired MCP Servers: {mcp_servers}\n\n"
+        "Knowledge Rules Summary:\n{rules_summary}\n\nAnalysis Report:\n{analysis_report}",
     ),
 ])
 
@@ -167,25 +181,50 @@ _HIGH_RISK_TOOLS = {"execute_python", "generate_code"}
 # Graph nodes
 # ---------------------------------------------------------------------------
 
+_CUSTOMER_OPS_SIGNALS = {
+    "troubleshooting", "troubleshoot", "escalation", "escalate",
+    "diagnostic", "diagnose", "sop", "support", "helpdesk", "runbook",
+    "playbook", "triage", "incident response", "call script",
+}
+
+_FUNCTIONAL_PURPOSE_MAP = {
+    "customer_operations": "Customer Operations",
+    "accounting": "Finance & Accounting",
+    "it_compliance": "IT Compliance & Security",
+    "hr_compliance": "HR & People Ops",
+    "general": "General Workflow Automation",
+}
+
+
 def ingest_analysis(state: FactoryState) -> dict:
     """Parse the incoming task and any attached analysis report."""
     task = state["task_input"]
+    task_lower = task.lower()
     report = state.get("analysis_report") or {}
 
-    # Extract domain hint from analysis report if available
+    # Determine domain — customer_operations takes priority when support signals detected
     domain_hint = "general"
-    if report:
+    functional_purpose = "General Workflow Automation"
+
+    if any(sig in task_lower for sig in _CUSTOMER_OPS_SIGNALS):
+        domain_hint = "customer_operations"
+        functional_purpose = "Customer Operations"
+    elif "account" in task_lower or "audit" in task_lower or "financial" in task_lower:
+        domain_hint = "accounting"
+        functional_purpose = "Finance & Accounting"
+    elif "compliance" in task_lower or "legal" in task_lower:
+        domain_hint = "it_compliance"
+        functional_purpose = "IT Compliance & Security"
+    elif report:
         sop_type = report.get("type", "").lower()
-        if "account" in task.lower() or "audit" in task.lower() or "financial" in task.lower():
-            domain_hint = "accounting"
-        elif "compliance" in task.lower() or "legal" in task.lower():
-            domain_hint = "it_compliance"
-        elif sop_type in ("sop", "jd"):
+        if sop_type in ("sop", "jd"):
             domain_hint = "accounting" if AccountingRouter.can_handle(task) else "general"
+            functional_purpose = _FUNCTIONAL_PURPOSE_MAP.get(domain_hint, "General Workflow Automation")
 
     return {
         "knowledge_domain": domain_hint,
-        "messages": [HumanMessage(content=f"[Task ingested] {task[:200]}")],
+        "functional_purpose": functional_purpose,
+        "messages": [HumanMessage(content=f"[Task ingested] {task[:200]} — Functional Purpose: {functional_purpose}")],
     }
 
 
@@ -219,7 +258,8 @@ def load_knowledge(state: FactoryState) -> dict:
         "knowledge_context": ctx_dict,
         "domain_analysis": domain_analysis,
         "human_review_required": human_required,
-        "messages": [AIMessage(content=f"[Knowledge loaded] Domain: {', '.join(ctx.domains)}, Rules: {len(ctx.applicable_rules)}, Human required: {human_required}")],
+        "required_mcp_servers": ctx.required_mcp_servers,
+        "messages": [AIMessage(content=f"[Knowledge loaded] Domain: {', '.join(ctx.domains)}, Rules: {len(ctx.applicable_rules)}, Human required: {human_required}, MCP: {ctx.required_mcp_servers}")],
     }
 
 
@@ -233,11 +273,13 @@ def plan_actions(state: FactoryState) -> dict:
     rules_summary = ctx.get("system_prompt_injection", "No specific rules loaded.")[:1000]
 
     try:
+        mcp_servers = state.get("required_mcp_servers") or []
         llm = _get_llm()
         chain = _PLAN_PROMPT | llm
         response = chain.invoke({
             "task": task,
             "domain": domain,
+            "mcp_servers": ", ".join(mcp_servers) if mcp_servers else "none",
             "rules_summary": rules_summary,
             "analysis_report": json.dumps(report, indent=2)[:2000] if report else "None",
         })
@@ -270,8 +312,69 @@ def plan_actions(state: FactoryState) -> dict:
     }
 
 
+def _is_sovereign_server(server_id: str) -> bool:
+    """Return True if the registered server is in sovereign (local) mode."""
+    try:
+        mgr = get_mcp_manager()
+        s = mgr._servers.get(server_id)
+        return bool(s and s.sovereign)
+    except Exception:
+        return False
+
+
+def _invoke_mcp_tool(tool_name: str, tool_input: str) -> str:
+    """
+    Dispatch an MCP tool call. tool_name format: mcp:<server_id>:<mcp_tool_name>
+    tool_input may be a JSON string (dict of arguments) or a plain string.
+    Returns a string result for state accumulation.
+
+    For sovereign (local) servers the result is prefixed with [LOCAL EXECUTION]
+    so the Live Terminal can surface a data-sovereignty audit line.
+    """
+    parts = tool_name.split(":", 2)
+    if len(parts) != 3:
+        return f"[{tool_name}] Invalid MCP tool format — expected mcp:<server_id>:<tool>"
+    _, server_id, mcp_tool = parts
+
+    try:
+        arguments = json.loads(tool_input) if tool_input.strip().startswith("{") else {"input": tool_input}
+    except json.JSONDecodeError:
+        arguments = {"input": tool_input}
+
+    display = layman_name(mcp_tool)
+    manager = get_mcp_manager()
+
+    if not manager.is_registered(server_id):
+        return (
+            f"[MCP: {display}] Server '{server_id}' is not connected. "
+            "The frontend should prompt the user to authorize this connector before the agent can use it."
+        )
+
+    sovereign = _is_sovereign_server(server_id)
+    locality_tag = "[LOCAL EXECUTION] " if sovereign else ""
+
+    # Emit a data-sovereignty audit line for file/document arguments
+    audit_lines = []
+    file_path_hint = arguments.get("path") or arguments.get("file") or arguments.get("spreadsheetId")
+    if sovereign and file_path_hint:
+        audit_lines.append(
+            f"[LOCAL EXECUTION] Accessing local resource: {file_path_hint} — "
+            "Data not uploaded to cloud."
+        )
+
+    try:
+        result = manager.call_tool(server_id, mcp_tool, arguments)
+        prefix = f"{locality_tag}[MCP: {display}]"
+        audit_prefix = "\n".join(audit_lines) + "\n" if audit_lines else ""
+        return f"{audit_prefix}{prefix}\n{str(result)[:3000]}"
+    except Exception as e:
+        return f"{locality_tag}[MCP: {display}] Error: {str(e)}"
+
+
 def execute_tools(state: FactoryState) -> dict:
-    """Execute all planned tool calls sequentially, collecting results."""
+    """Execute all planned tool calls sequentially, collecting results.
+    Supports both built-in tools and MCP tools (prefix: mcp:<server>:<tool>).
+    """
     tools_list = state.get("planned_actions", [])
     inputs_list = state.get("planned_action_inputs", [])
 
@@ -284,14 +387,21 @@ def execute_tools(state: FactoryState) -> dict:
     }
 
     results = []
+    mcp_results = []
     pending_high_risk = None
 
     for i, (tool_name, tool_input) in enumerate(zip(tools_list, inputs_list)):
+        # MCP tool — route to MCPManager
+        if tool_name.startswith("mcp:"):
+            result = _invoke_mcp_tool(tool_name, tool_input)
+            mcp_results.append(result)
+            results.append(result)
+            continue
+
         # Flag high-risk tools — these will be interrupted before execution
         if tool_name in _HIGH_RISK_TOOLS:
             pending_high_risk = tool_name
             results.append(f"[{tool_name}] PENDING HUMAN APPROVAL — input: {tool_input[:300]}")
-            # Stop before executing high-risk tools; they run after human approval
             break
 
         tool_fn = TOOL_MAP.get(tool_name)
@@ -300,16 +410,24 @@ def execute_tools(state: FactoryState) -> dict:
             continue
 
         try:
+            # Emit a LOCAL EXECUTION audit line for file-reading tools
+            local_tag = ""
+            if tool_name in ("extract_document", "read_csv_as_json"):
+                local_tag = (
+                    f"[LOCAL EXECUTION] Reading local file: {tool_input[:200]} — "
+                    "Data not uploaded to cloud.\n"
+                )
             result = tool_fn.invoke(tool_input)
-            results.append(f"[{tool_name}]\n{str(result)[:3000]}")
+            results.append(f"{local_tag}[{tool_name}]\n{str(result)[:3000]}")
         except Exception as e:
             results.append(f"[{tool_name}] Error: {str(e)}")
 
     return {
         "tool_results": results,
+        "mcp_tool_results": mcp_results,
         "high_risk_action_pending": pending_high_risk,
         "current_action_index": len(results),
-        "messages": [AIMessage(content=f"[Tools executed] {len(results)} results collected")],
+        "messages": [AIMessage(content=f"[Tools executed] {len(results)} results collected ({len(mcp_results)} MCP)")],
     }
 
 
@@ -386,6 +504,59 @@ def execute_high_risk_tools(state: FactoryState) -> dict:
     }
 
 
+_SUPPORT_SOP_PRO_TIPS = [
+    "Connect an Email Auto-Response agent to handle common queries before human escalation.",
+    "Sync resolved tickets to a Knowledge Base so future issues auto-resolve without agent effort.",
+    "Add a Sentiment Detector to auto-escalate frustrated customers before they churn.",
+    "Route repeat issues to a dedicated FAQ bot to cut ticket volume by up to 40%.",
+]
+
+_DOMAIN_CATEGORY_LABELS = {
+    "customer_operations": "Workflow Automation Blueprint — Customer Operations",
+    "accounting": "Workflow Automation Blueprint — Finance & Accounting",
+    "it_compliance": "Workflow Automation Blueprint — IT Compliance",
+    "hr_compliance": "Workflow Automation Blueprint — HR & People Ops",
+    "general": "Workflow Automation Blueprint",
+}
+
+
+def _build_frontend_payload(state: FactoryState, report_text: str) -> dict:
+    domain = state.get("knowledge_domain", "general")
+    functional_purpose = state.get("functional_purpose", "General Workflow Automation")
+    task = state.get("task_input", "")
+    report = state.get("analysis_report") or {}
+    ctx = state.get("knowledge_context") or {}
+
+    # Count steps from planned actions or analysis report
+    step_count = len(state.get("planned_actions", []))
+    if step_count == 0:
+        step_count = report.get("step_count") or report.get("total_tasks") or 0
+    step_prefix = f"Automating a {step_count}-step " if step_count > 1 else "Automating a "
+
+    # Build a human-readable summary line
+    summary = f"{step_prefix}{functional_purpose} Workflow"
+
+    # Category label (no tech jargon)
+    category = _DOMAIN_CATEGORY_LABELS.get(domain, "Workflow Automation Blueprint")
+
+    # Pro-Tip: surface bundled automations for support/customer-ops SOPs
+    pro_tip = None
+    if domain == "customer_operations":
+        import hashlib
+        # Deterministically pick a tip based on task text so it stays stable per task
+        idx = int(hashlib.md5(task.encode()).hexdigest(), 16) % len(_SUPPORT_SOP_PRO_TIPS)
+        pro_tip = f"Pro-Tip: {_SUPPORT_SOP_PRO_TIPS[idx]}"
+
+    return {
+        "summary": summary,
+        "category": category,
+        "functional_purpose": functional_purpose,
+        "pro_tip": pro_tip,
+        "domain": domain,
+        "step_count": step_count,
+    }
+
+
 def synthesize(state: FactoryState) -> dict:
     """Produce the final structured report."""
     ctx = state.get("knowledge_context", {})
@@ -410,8 +581,11 @@ def synthesize(state: FactoryState) -> dict:
             f"Raw tool results:\n{tool_results_text[:2000]}"
         )
 
+    frontend_payload = _build_frontend_payload(state, output)
+
     return {
         "final_output": output,
+        "frontend_payload": frontend_payload,
         "messages": [AIMessage(content=f"[Final report generated] {len(output)} chars")],
     }
 
@@ -491,16 +665,20 @@ def _make_initial_state(
         "analysis_report": analysis_report,
         "thread_id": thread_id,
         "knowledge_domain": None,
+        "functional_purpose": None,
         "knowledge_context": None,
         "domain_analysis": None,
         "planned_actions": [],
         "planned_action_inputs": [],
         "current_action_index": 0,
         "tool_results": [],
+        "required_mcp_servers": [],
+        "mcp_tool_results": [],
         "human_review_required": False,
         "high_risk_action_pending": None,
         "human_feedback": None,
         "final_output": None,
+        "frontend_payload": None,
         "messages": [],
         "error": None,
     }

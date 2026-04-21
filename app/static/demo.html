@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Mind — Digital Co-worker Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #030712; color: #f9fafb; }
+
+    .terminal-font { font-family: 'JetBrains Mono', monospace; }
+
+    /* Indigo-Gold gradient button */
+    .btn-assemble {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 40%, #d97706 100%);
+      transition: all 0.3s ease;
+      box-shadow: 0 0 30px rgba(79,70,229,0.4);
+    }
+    .btn-assemble:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 50px rgba(79,70,229,0.6), 0 0 20px rgba(217,119,6,0.4);
+    }
+    .btn-assemble:disabled {
+      opacity: 0.5;
+      transform: none;
+      cursor: not-allowed;
+    }
+
+    /* Glowing border on cards */
+    .glow-border {
+      border: 1px solid rgba(79,70,229,0.3);
+      box-shadow: 0 0 20px rgba(79,70,229,0.1);
+    }
+
+    /* Terminal */
+    .terminal-bg {
+      background: #0a0a0f;
+      border: 1px solid #1f2937;
+      border-top: 2px solid #4f46e5;
+    }
+    .terminal-line { opacity: 0; animation: fadeIn 0.3s ease forwards; }
+    @keyframes fadeIn { to { opacity: 1; } }
+
+    /* Chat bubble */
+    .chat-user { background: #1e1b4b; border: 1px solid #3730a3; }
+    .chat-bot  { background: #111827; border: 1px solid #374151; }
+
+    /* Progress bar fill */
+    .progress-fill { transition: width 1s ease; }
+
+    /* Pulse animation for "online" indicator */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .pulse-dot { animation: pulse-dot 1.5s ease infinite; }
+
+    /* Node graph */
+    .node-card {
+      border: 1px solid #374151;
+      transition: all 0.3s ease;
+    }
+    .node-card.active {
+      border-color: #4f46e5;
+      background: rgba(79,70,229,0.1);
+      box-shadow: 0 0 10px rgba(79,70,229,0.3);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+    textarea { resize: vertical; }
+
+    .skeleton {
+      background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- ─── Header ──────────────────────────────────────────────── -->
+  <header class="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg btn-assemble flex items-center justify-center text-white font-bold text-sm">A</div>
+        <span class="font-semibold text-white">Agentic Mind</span>
+        <span class="text-gray-500 text-sm">/ Digital Co-worker Builder</span>
+      </div>
+      <div id="status-badge" class="hidden flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/50 px-3 py-1.5 rounded-full border border-emerald-800">
+        <span class="w-2 h-2 bg-emerald-400 rounded-full pulse-dot"></span>
+        Co-worker Online
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-10">
+
+    <!-- ─── Phase 1: ANALYZE ──────────────────────────────────── -->
+    <section id="phase-analyze">
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Analyze Your SOP</h1>
+        <p class="text-gray-400">Paste a Standard Operating Procedure, Job Description, or support runbook. The engine will assess automation potential and generate a Digital Co-worker blueprint.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2">
+          <div class="glow-border rounded-xl overflow-hidden">
+            <div class="bg-gray-900 px-4 py-2.5 flex items-center gap-2 border-b border-gray-800">
+              <div class="w-3 h-3 rounded-full bg-red-500/70"></div>
+              <div class="w-3 h-3 rounded-full bg-yellow-500/70"></div>
+              <div class="w-3 h-3 rounded-full bg-green-500/70"></div>
+              <span class="text-gray-500 text-xs ml-2 terminal-font">sop-input.txt</span>
+            </div>
+            <textarea
+              id="sop-input"
+              rows="16"
+              class="w-full bg-gray-950 text-gray-200 px-5 py-4 terminal-font text-sm focus:outline-none placeholder-gray-700"
+              placeholder="Paste your SOP here...
+
+Example:
+Troubleshooting SOP — Network Connectivity Issues
+
+Step 1: Receive customer complaint via helpdesk ticket
+Step 2: Verify customer account status and service tier
+Step 3: Run automated diagnostic on customer's connection
+Step 4: If packet loss > 5%, escalate to Tier 2 support
+Step 5: Document resolution and update knowledge base
+Step 6: Send resolution summary to customer via email"
+            ></textarea>
+          </div>
+
+          <div class="mt-4 flex items-center gap-4">
+            <button
+              id="analyze-btn"
+              onclick="analyzeSOp()"
+              class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              Analyze SOP
+            </button>
+            <button onclick="loadDemo()" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+              Load demo SOP →
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+            <h3 class="text-sm font-semibold text-gray-300 mb-3">What gets analyzed</h3>
+            <ul class="space-y-2 text-sm text-gray-400">
+              <li class="flex items-start gap-2"><span class="text-indigo-400 mt-0.5">→</span> Automation potential score</li>
+              <li class="flex items-start gap-2"><span class="text-indigo-400 mt-0.5">→</span> Precision risk & error sensitivity</li>
+              <li class="flex items-start gap-2"><span class="text-indigo-400 mt-0.5">→</span> Required AI skills & tools</li>
+              <li class="flex items-start gap-2"><span class="text-indigo-400 mt-0.5">→</span> ROI estimate & pricing tier</li>
+              <li class="flex items-start gap-2"><span class="text-indigo-400 mt-0.5">→</span> Human-in-the-loop requirements</li>
+            </ul>
+          </div>
+          <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+            <h3 class="text-sm font-semibold text-gray-300 mb-2">Supported formats</h3>
+            <div class="flex flex-wrap gap-2">
+              <span class="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">SOP</span>
+              <span class="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">Job Description</span>
+              <span class="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">Runbook</span>
+              <span class="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">Escalation Guide</span>
+              <span class="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded">Playbook</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div id="analyze-loading" class="hidden mt-8">
+        <div class="skeleton h-4 rounded w-1/3 mb-3"></div>
+        <div class="skeleton h-32 rounded mb-3"></div>
+        <div class="skeleton h-4 rounded w-1/2"></div>
+      </div>
+    </section>
+
+    <!-- ─── Phase 2: BUILD ────────────────────────────────────── -->
+    <section id="phase-build" class="hidden mt-10">
+
+      <!-- Analysis Results Card -->
+      <div id="analysis-card" class="glow-border rounded-xl overflow-hidden mb-8">
+        <div class="bg-gray-900 px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+            <span class="text-sm font-medium text-gray-200">Analysis Complete</span>
+          </div>
+          <span id="analysis-domain-badge" class="text-xs bg-indigo-950 text-indigo-300 px-3 py-1 rounded-full border border-indigo-800"></span>
+        </div>
+        <div class="p-5 bg-gray-950">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+              <div class="text-2xl font-bold text-indigo-400" id="card-automation">—</div>
+              <div class="text-xs text-gray-500 mt-1">Automation Score</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+              <div class="text-2xl font-bold text-amber-400" id="card-precision">—</div>
+              <div class="text-xs text-gray-500 mt-1">Precision Score</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+              <div class="text-2xl font-bold text-emerald-400" id="card-plan">—</div>
+              <div class="text-xs text-gray-500 mt-1">Recommended Plan</div>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+              <div class="text-2xl font-bold text-purple-400" id="card-steps">—</div>
+              <div class="text-xs text-gray-500 mt-1">SOP Steps</div>
+            </div>
+          </div>
+
+          <div class="bg-gray-900 rounded-lg p-4 border border-gray-800 mb-4">
+            <div class="text-xs text-gray-500 mb-1">Process Understanding</div>
+            <div id="card-process" class="text-sm text-gray-200"></div>
+          </div>
+
+          <div id="protip-banner" class="hidden bg-amber-950/30 border border-amber-800/50 rounded-lg p-4 mb-4">
+            <div class="text-xs font-semibold text-amber-400 mb-1">💡 Pro-Tip</div>
+            <div id="protip-text" class="text-sm text-amber-200/80"></div>
+          </div>
+
+          <!-- Assemble Button — high impact, Indigo/Gold gradient -->
+          <div class="flex flex-col items-center py-4">
+            <p class="text-gray-500 text-sm mb-4">Analysis approved. Ready to deploy your Digital Co-worker.</p>
+            <button
+              id="assemble-btn"
+              onclick="assembleCoworker()"
+              class="btn-assemble text-white font-semibold text-lg px-10 py-4 rounded-xl flex items-center gap-3"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Assemble Digital Co-worker
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Terminal (shown during build) -->
+      <div id="terminal-panel" class="hidden rounded-xl overflow-hidden mb-8">
+        <div class="terminal-bg">
+          <div class="px-4 py-2.5 border-b border-gray-800 flex items-center gap-2">
+            <div class="w-2.5 h-2.5 rounded-full bg-yellow-500 pulse-dot"></div>
+            <span class="text-xs text-gray-400 terminal-font">Action Center — Building...</span>
+          </div>
+          <div class="p-5 min-h-36">
+            <div id="terminal-output" class="terminal-font text-sm space-y-1.5"></div>
+            <div id="terminal-cursor" class="hidden terminal-font text-green-400 text-sm mt-2">█</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Build progress bar -->
+      <div id="build-progress" class="hidden mb-8">
+        <div class="flex justify-between text-xs text-gray-500 mb-2">
+          <span>Assembling co-worker</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div id="progress-bar" class="progress-fill h-full bg-gradient-to-r from-indigo-500 to-amber-500 rounded-full" style="width:0%"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ─── Phase 3: TEST ─────────────────────────────────────── -->
+    <section id="phase-test" class="hidden">
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left: Co-worker card + LangGraph nodes -->
+        <div class="space-y-4">
+          <!-- Co-worker identity -->
+          <div class="glow-border rounded-xl p-5 bg-gray-950">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-12 h-12 btn-assemble rounded-xl flex items-center justify-center text-2xl">🤖</div>
+              <div>
+                <div id="cw-name" class="font-semibold text-white text-sm"></div>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="w-2 h-2 bg-emerald-400 rounded-full pulse-dot"></span>
+                  <span class="text-xs text-emerald-400">Online & Ready</span>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-2 text-xs text-gray-400">
+              <div class="flex justify-between"><span>Domain</span><span id="cw-domain" class="text-indigo-300"></span></div>
+              <div class="flex justify-between"><span>Tools</span><span id="cw-tools" class="text-gray-200"></span></div>
+              <div class="flex justify-between"><span>Nodes</span><span id="cw-nodes" class="text-gray-200"></span></div>
+              <div class="flex justify-between"><span>Agent ID</span><span id="cw-id" class="text-gray-500 terminal-font"></span></div>
+            </div>
+          </div>
+
+          <!-- LangGraph workflow nodes -->
+          <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+            <div class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">LangGraph Workflow</div>
+            <div id="langgraph-nodes" class="space-y-1.5"></div>
+          </div>
+
+          <!-- Diagnostic questions progress -->
+          <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+            <div class="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wider">Diagnostic Progress</div>
+            <div id="diagnostic-progress" class="space-y-1.5"></div>
+          </div>
+        </div>
+
+        <!-- Right: Chat interface -->
+        <div class="lg:col-span-2 flex flex-col">
+          <div class="glow-border rounded-xl overflow-hidden flex flex-col" style="height: 600px">
+
+            <!-- Chat header -->
+            <div class="bg-gray-900 px-5 py-3.5 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                <span class="text-sm font-medium text-gray-200">Test Your Co-worker</span>
+              </div>
+              <button onclick="clearChat()" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear chat</button>
+            </div>
+
+            <!-- Messages -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto p-5 space-y-4">
+              <div class="chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs font-semibold text-indigo-400">Co-worker</span>
+                </div>
+                Hi! I'm your Digital Co-worker. Describe the issue you're facing and I'll work through the diagnostic steps with you.
+              </div>
+            </div>
+
+            <!-- Typing indicator -->
+            <div id="typing-indicator" class="hidden px-5 py-2">
+              <div class="flex items-center gap-2 text-xs text-gray-500">
+                <div class="flex gap-1">
+                  <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style="animation-delay:0s"></span>
+                  <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+                  <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+                </div>
+                Co-worker is thinking...
+              </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="border-t border-gray-800 p-4 flex-shrink-0">
+              <div class="flex gap-3">
+                <input
+                  id="chat-input"
+                  type="text"
+                  placeholder="Type a support query or issue description..."
+                  class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  onkeydown="if(event.key==='Enter') sendMessage()"
+                />
+                <button
+                  id="send-btn"
+                  onclick="sendMessage()"
+                  class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ─── State ─────────────────────────────────────────────────
+    let state = {
+      analysis: null,
+      agentSpec: null,
+      coworkerConfig: null,
+      conversationHistory: [],
+      diagnosticStep: 0,
+    };
+
+    // ─── Demo SOP ──────────────────────────────────────────────
+    function loadDemo() {
+      document.getElementById('sop-input').value = `Troubleshooting SOP — Internet Connectivity Issues
+
+Purpose: To diagnose and resolve customer-reported internet connectivity issues in a structured, repeatable manner.
+
+Step 1: Receive customer complaint via helpdesk ticket system
+Step 2: Verify customer account status and active service tier
+Step 3: Check for active outages in the customer's service area
+Step 4: Run automated line diagnostic to test signal strength and packet loss
+Step 5: If packet loss > 5% or signal below threshold, escalate to Tier 2 network team
+Step 6: If no outage detected, guide customer through device restart and cable check
+Step 7: Verify connection is restored and speed tests pass minimum SLA thresholds
+Step 8: Document resolution steps and update knowledge base article
+Step 9: Send resolution summary to customer via email and close ticket`;
+    }
+
+    // ─── Phase 1: Analyze ──────────────────────────────────────
+    async function analyzeSOp() {
+      const text = document.getElementById('sop-input').value.trim();
+      if (!text) { alert('Please enter an SOP to analyze.'); return; }
+
+      const btn = document.getElementById('analyze-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Analyzing...';
+
+      document.getElementById('analyze-loading').classList.remove('hidden');
+
+      try {
+        const res = await fetch('/sop/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: text }),
+        });
+        const data = await res.json();
+
+        if (data.status !== 'success') {
+          throw new Error(data.message || 'Analysis failed');
+        }
+
+        state.analysis = data.analysis;
+        state.agentSpec = data.agent_spec;
+        showBuildPhase(data.analysis, data.agent_spec);
+
+      } catch (err) {
+        alert('Analysis error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg> Analyze SOP';
+        document.getElementById('analyze-loading').classList.add('hidden');
+      }
+    }
+
+    // ─── Phase 2: Show Build Panel ─────────────────────────────
+    function showBuildPhase(analysis, spec) {
+      const bm = analysis.business_metrics || {};
+      const pa = analysis.precision_analysis || {};
+      const steps = analysis.steps || [];
+      const fp = analysis.frontend_payload || {};
+
+      // Populate metric cards
+      setCard('card-automation', (bm.automation_score || 0) + '%');
+      setCard('card-precision', (pa.precision_score || 0) + '%');
+      setCard('card-plan', bm.recommended_plan || 'Pro');
+      setCard('card-steps', steps.length || '—');
+      document.getElementById('card-process').textContent = analysis.process_understanding || '—';
+
+      // Domain badge
+      const domain = fp.functional_purpose || analysis.type || 'SOP';
+      document.getElementById('analysis-domain-badge').textContent = domain;
+
+      // Pro-tip
+      if (fp.pro_tip) {
+        document.getElementById('protip-text').textContent = fp.pro_tip;
+        document.getElementById('protip-banner').classList.remove('hidden');
+      }
+
+      document.getElementById('phase-analyze').classList.add('hidden');
+      document.getElementById('phase-build').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function setCard(id, val) {
+      document.getElementById(id).textContent = val;
+    }
+
+    // ─── Phase 2: Assemble ─────────────────────────────────────
+    async function assembleCoworker() {
+      const btn = document.getElementById('assemble-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Assembling...';
+
+      // Show terminal + progress
+      document.getElementById('terminal-panel').classList.remove('hidden');
+      document.getElementById('build-progress').classList.remove('hidden');
+      document.getElementById('terminal-cursor').classList.remove('hidden');
+
+      const termEl = document.getElementById('terminal-output');
+      termEl.innerHTML = '';
+      setProgress(0);
+
+      // Run build API + stream terminal in parallel
+      const [buildResult] = await Promise.all([
+        callBuildAPI(),
+        streamBuildTerminal(termEl),
+      ]);
+
+      if (!buildResult) {
+        addTermLine(termEl, '✗ Build failed. Check server logs.', 'text-red-400');
+        btn.disabled = false;
+        btn.innerHTML = 'Retry';
+        return;
+      }
+
+      state.coworkerConfig = buildResult.config;
+      setProgress(100);
+      document.getElementById('terminal-cursor').classList.add('hidden');
+      addTermLine(termEl, '', '');
+      addTermLine(termEl, `✓ Agent ID: ${buildResult.config.agent_id}`, 'text-emerald-400');
+      addTermLine(termEl, `✓ ${buildResult.config.node_count}-node LangGraph workflow compiled`, 'text-emerald-400');
+      addTermLine(termEl, `✓ ${buildResult.config.tools.length} tools registered`, 'text-emerald-400');
+      addTermLine(termEl, '✓ Sandbox persistence enabled', 'text-emerald-400');
+
+      // Brief pause then transition to test phase
+      await sleep(1400);
+      showTestPhase(buildResult.config);
+    }
+
+    async function callBuildAPI() {
+      try {
+        const res = await fetch('/ai/build', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            analysis: state.analysis,
+            agent_spec: state.agentSpec,
+          }),
+        });
+        const data = await res.json();
+        return data.status === 'success' ? data : null;
+      } catch { return null; }
+    }
+
+    async function streamBuildTerminal(termEl) {
+      return new Promise((resolve) => {
+        const evtSrc = new EventSource('/ai/build/stream');
+        const progressSteps = [10, 35, 65, 90];
+        let stepIdx = 0;
+
+        evtSrc.onmessage = (e) => {
+          const msg = JSON.parse(e.data);
+          const color = msg.type === 'complete' ? 'text-emerald-400' : 'text-green-300';
+          const prefix = msg.type === 'complete' ? '✓ ' : '▶ ';
+          addTermLine(termEl, prefix + msg.message, color);
+
+          if (msg.type === 'progress' && stepIdx < progressSteps.length) {
+            setProgress(progressSteps[stepIdx++]);
+          }
+
+          if (msg.type === 'complete') {
+            evtSrc.close();
+            resolve();
+          }
+        };
+
+        evtSrc.onerror = () => { evtSrc.close(); resolve(); };
+      });
+    }
+
+    function addTermLine(container, text, colorClass) {
+      const el = document.createElement('div');
+      el.className = `terminal-line ${colorClass}`;
+      el.textContent = text || '';
+      container.appendChild(el);
+      container.parentElement.scrollTop = container.parentElement.scrollHeight;
+    }
+
+    function setProgress(pct) {
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent = pct + '%';
+    }
+
+    // ─── Phase 3: Test ─────────────────────────────────────────
+    function showTestPhase(config) {
+      document.getElementById('phase-build').classList.add('hidden');
+      document.getElementById('phase-test').classList.remove('hidden');
+      document.getElementById('status-badge').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Populate co-worker identity sidebar
+      document.getElementById('cw-name').textContent = config.name;
+      document.getElementById('cw-domain').textContent = config.functional_purpose;
+      document.getElementById('cw-tools').textContent = config.tools.join(', ') || '—';
+      document.getElementById('cw-nodes').textContent = config.node_count + ' nodes';
+      document.getElementById('cw-id').textContent = config.agent_id;
+
+      // Render LangGraph nodes
+      renderLangGraphNodes(config.langgraph_nodes || []);
+
+      // Render diagnostic question progress
+      renderDiagnosticProgress(config.diagnostic_questions || [], 0);
+    }
+
+    function renderLangGraphNodes(nodes) {
+      const el = document.getElementById('langgraph-nodes');
+      const typeColors = {
+        ingest: 'text-blue-400', classify: 'text-purple-400', diagnose: 'text-yellow-400',
+        knowledge: 'text-cyan-400', decision: 'text-orange-400', resolve: 'text-emerald-400',
+        close: 'text-green-400', validate: 'text-indigo-400', rules: 'text-pink-400',
+        execute: 'text-gray-300', synthesize: 'text-emerald-400', report: 'text-blue-300',
+        assess: 'text-orange-300', respond: 'text-red-400', process: 'text-teal-400',
+      };
+      el.innerHTML = nodes.map((n, i) => `
+        <div id="node-${n.id}" class="node-card rounded-lg px-3 py-2 flex items-center gap-2 text-xs ${i === 0 ? 'active' : ''}">
+          <span class="w-5 h-5 rounded bg-gray-800 flex items-center justify-center text-gray-500 flex-shrink-0 font-mono text-xs">${i+1}</span>
+          <span class="${typeColors[n.type] || 'text-gray-400'}">${n.label}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderDiagnosticProgress(questions, completedCount) {
+      const el = document.getElementById('diagnostic-progress');
+      el.innerHTML = questions.map((q, i) => {
+        const done = i < completedCount;
+        const active = i === completedCount;
+        return `
+          <div class="flex items-start gap-2 text-xs ${done ? 'text-gray-500' : active ? 'text-gray-200' : 'text-gray-600'}">
+            <span class="flex-shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center border ${
+              done ? 'bg-emerald-900 border-emerald-700 text-emerald-400' :
+              active ? 'border-indigo-500 text-indigo-400' : 'border-gray-700'
+            } text-xs">${done ? '✓' : (i+1)}</span>
+            <span class="${active ? 'font-medium' : ''}">${q}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ─── Chat ──────────────────────────────────────────────────
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const query = input.value.trim();
+      if (!query || !state.coworkerConfig) return;
+
+      input.value = '';
+      document.getElementById('send-btn').disabled = true;
+
+      // Add user message
+      appendChatMessage('user', query);
+      state.conversationHistory.push({ role: 'user', content: query });
+
+      // Show typing
+      document.getElementById('typing-indicator').classList.remove('hidden');
+      scrollChat();
+
+      try {
+        const res = await fetch('/ai/coworker/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            config: state.coworkerConfig,
+            conversation_history: state.conversationHistory.slice(-12),
+          }),
+        });
+        const data = await res.json();
+
+        document.getElementById('typing-indicator').classList.add('hidden');
+
+        if (data.status === 'success') {
+          appendChatMessage('assistant', data.response);
+          state.conversationHistory.push({ role: 'assistant', content: data.response });
+          state.diagnosticStep = data.diagnostic_step;
+
+          // Update diagnostic progress
+          renderDiagnosticProgress(
+            state.coworkerConfig.diagnostic_questions,
+            data.diagnostic_step - 1
+          );
+
+          // Highlight active LangGraph node
+          highlightActiveNode(data.diagnostic_step);
+        } else {
+          appendChatMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+        }
+      } catch {
+        document.getElementById('typing-indicator').classList.add('hidden');
+        appendChatMessage('assistant', 'Connection error. Please check the server.');
+      } finally {
+        document.getElementById('send-btn').disabled = false;
+        input.focus();
+      }
+    }
+
+    function appendChatMessage(role, content) {
+      const container = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = role === 'user'
+        ? 'chat-user rounded-xl p-4 text-sm text-gray-200 max-w-lg ml-auto'
+        : 'chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg';
+      div.innerHTML = role === 'assistant'
+        ? `<div class="flex items-center gap-2 mb-2"><span class="text-xs font-semibold text-indigo-400">Co-worker</span></div>${escapeHtml(content)}`
+        : `<div class="flex items-center gap-2 mb-2 justify-end"><span class="text-xs font-semibold text-gray-400">You</span></div>${escapeHtml(content)}`;
+      container.appendChild(div);
+      scrollChat();
+    }
+
+    function scrollChat() {
+      const c = document.getElementById('chat-messages');
+      c.scrollTop = c.scrollHeight;
+    }
+
+    function clearChat() {
+      state.conversationHistory = [];
+      state.diagnosticStep = 0;
+      document.getElementById('chat-messages').innerHTML = `
+        <div class="chat-bot rounded-xl p-4 text-sm text-gray-300 max-w-lg">
+          <div class="flex items-center gap-2 mb-2"><span class="text-xs font-semibold text-indigo-400">Co-worker</span></div>
+          Chat cleared. Describe the issue you're facing and I'll start fresh.
+        </div>`;
+      if (state.coworkerConfig) {
+        renderDiagnosticProgress(state.coworkerConfig.diagnostic_questions, 0);
+      }
+    }
+
+    function highlightActiveNode(step) {
+      const nodes = state.coworkerConfig?.langgraph_nodes || [];
+      // Map diagnostic step to a node index (rough heuristic)
+      const nodeIdx = Math.min(Math.floor((step / 6) * nodes.length), nodes.length - 1);
+      nodes.forEach((n, i) => {
+        const el = document.getElementById(`node-${n.id}`);
+        if (el) el.classList.toggle('active', i === nodeIdx);
+      });
+    }
+
+    // ─── Utilities ─────────────────────────────────────────────
+    function escapeHtml(text) {
+      return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  </script>
+</body>
+</html>

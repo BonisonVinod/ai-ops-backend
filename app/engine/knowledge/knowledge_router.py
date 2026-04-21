@@ -45,6 +45,36 @@ DOMAIN_KEYWORDS = {
         "breach", "incident", "cert-in", "sebi cscrf", "rbi itgf", "log retention",
         "aadhaar", "pan", "biometric", "sensitive data", "data classification",
     },
+    "customer_operations": {
+        "troubleshooting", "troubleshoot", "sop", "escalation", "escalate",
+        "diagnostic", "diagnose", "support", "helpdesk", "help desk", "ticket",
+        "customer complaint", "resolution", "triage", "runbook", "playbook",
+        "incident response", "service request", "call script", "agent guide",
+    },
+}
+
+# ---------------------------------------------------------------------------
+# MCP server detection keywords
+# ---------------------------------------------------------------------------
+
+MCP_SERVER_KEYWORDS: dict[str, set[str]] = {
+    "gmail": {
+        "email", "e-mail", "send mail", "send email", "inbox", "outbox",
+        "customer contact", "contact customer", "notify customer", "mail customer",
+        "follow up", "follow-up", "reply to customer", "email notification",
+        "correspondence", "customer communication", "notify via email",
+    },
+    "google_sheets": {
+        "spreadsheet", "google sheets", "data tracking", "track data",
+        "data entry", "record keeping", "ledger", "tracker", "log entries",
+        "data ledger", "update sheet", "append row", "tracking sheet",
+        "report sheet", "data table", "fill spreadsheet", "data log",
+    },
+    "slack": {
+        "slack", "slack message", "send slack", "slack notification",
+        "team notification", "channel alert", "post to channel",
+        "notify team", "alert team", "team message",
+    },
 }
 
 
@@ -70,6 +100,7 @@ class KnowledgeContext:
     variance_thresholds: dict
     system_prompt_injection: str
     human_review_required: bool = False
+    required_mcp_servers: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -89,6 +120,7 @@ class KnowledgeContext:
             "variance_thresholds": self.variance_thresholds,
             "human_review_required": self.human_review_required,
             "system_prompt_injection": self.system_prompt_injection,
+            "required_mcp_servers": self.required_mcp_servers,
         }
 
 
@@ -98,7 +130,7 @@ class KnowledgeContext:
 
 class DomainClassification(BaseModel):
     domains: list[str] = PydanticField(
-        description="List of applicable domains from: accounting, it_compliance, hr_compliance, general"
+        description="List of applicable domains from: accounting, it_compliance, customer_operations, hr_compliance, general"
     )
     confidence: float = PydanticField(description="0.0 to 1.0")
     reasoning: str = PydanticField(description="Brief explanation of domain selection")
@@ -108,7 +140,9 @@ _CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
     (
         "system",
         "Classify the given SOP or task description into one or more knowledge domains. "
-        "Available domains: accounting, it_compliance, hr_compliance, general. "
+        "Available domains: accounting, it_compliance, customer_operations, hr_compliance, general. "
+        "Use 'customer_operations' for anything involving troubleshooting guides, support SOPs, "
+        "escalation procedures, diagnostic runbooks, or helpdesk workflows. "
         "Return JSON with: domains (list), confidence (float), reasoning (string).",
     ),
     ("human", "Task/SOP description:\n{text}"),
@@ -163,6 +197,7 @@ class KnowledgeRouter:
             human_required = human_required or any(a in all_blocked for a in planned_actions)
 
         prompt_injection = self._build_system_injection(domains, all_rules, all_blocked)
+        required_mcp = self._detect_mcp_servers(text)
 
         return KnowledgeContext(
             domains=domains,
@@ -172,6 +207,7 @@ class KnowledgeRouter:
             variance_thresholds=all_thresholds,
             system_prompt_injection=prompt_injection,
             human_review_required=human_required,
+            required_mcp_servers=required_mcp,
         )
 
     def get_context_dict(self, text: str, planned_actions: Optional[list[str]] = None) -> dict:
@@ -202,6 +238,15 @@ class KnowledgeRouter:
             if any(kw in text_lower for kw in keywords):
                 matched.append(domain)
         return matched
+
+    def _detect_mcp_servers(self, text: str) -> list[str]:
+        """Scan text for signals that indicate which MCP servers are needed."""
+        text_lower = text.lower()
+        detected = []
+        for server_id, keywords in MCP_SERVER_KEYWORDS.items():
+            if any(kw in text_lower for kw in keywords):
+                detected.append(server_id)
+        return detected
 
     # ------------------------------------------------------------------
     # Rule loading & filtering
@@ -240,17 +285,33 @@ class KnowledgeRouter:
     # System prompt injection builder
     # ------------------------------------------------------------------
 
+    # Friendly display names for domains shown to users
+    _DOMAIN_LABELS = {
+        "accounting": "Finance & Accounting",
+        "it_compliance": "IT Compliance & Security",
+        "customer_operations": "Customer Operations",
+        "hr_compliance": "HR & People Ops",
+        "general": "General Workflow",
+    }
+
     def _build_system_injection(
         self,
         domains: list[str],
         rules: list[ApplicableRule],
         blocked_actions: list[str],
     ) -> str:
+        domain_labels = ", ".join(
+            self._DOMAIN_LABELS.get(d, d.replace("_", " ").title()) for d in domains
+        )
+
         if not rules:
-            return "No specific domain rules apply. Proceed with general best practices."
+            return (
+                f"## Workflow Automation Blueprint — {domain_labels}\n\n"
+                "No specific compliance rules apply. Proceed with general best practices."
+            )
 
         lines = [
-            f"## ACTIVE DOMAIN RULES ({', '.join(d.upper() for d in domains)})",
+            f"## Workflow Automation Blueprint — {domain_labels}",
             "",
             "You MUST comply with the following rules. Do NOT skip any rule.",
             "",
@@ -263,7 +324,7 @@ class KnowledgeRouter:
             lines.append("")
 
         if blocked_actions:
-            lines.append("## BLOCKED ACTIONS (never execute autonomously):")
+            lines.append("## Steps Requiring Human Sign-Off (cannot run automatically):")
             for action in blocked_actions:
                 lines.append(f"  ✗ {action}")
 
